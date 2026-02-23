@@ -39,3 +39,7 @@
 
 # debug information files
 *.dwo
+
+# Maven build output
+target/
+
