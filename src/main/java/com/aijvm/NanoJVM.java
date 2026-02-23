@@ -959,7 +959,7 @@ public class NanoJVM {
                 Object v = args[0];
                 if (v instanceof JvmObject jo2) v = jo2.toString();
                 if (v == null) sb.append("null");
-                else if (v instanceof Integer i)  sb.append((int)(int) i);
+                else if (v instanceof Integer i)  sb.append((int) i);
                 else if (v instanceof Long l)      sb.append((long) l);
                 else if (v instanceof Float f)     sb.append((float) f);
                 else if (v instanceof Double d)    sb.append((double) d);
@@ -1014,7 +1014,12 @@ public class NanoJVM {
                                     ? s.replace(a, (String) args[1])
                                     : s.replace((char) toInt(args[0]), (char) toInt(args[1]));
             case "split"           -> s.split((String) args[0]);
-            case "toCharArray"     -> { char[] ca = s.toCharArray(); int[] ia = new int[ca.length]; for (int i=0;i<ca.length;i++) ia[i]=ca[i]; yield ia; }
+            case "toCharArray"     -> {
+                char[] ca = s.toCharArray();
+                int[] ia = new int[ca.length];
+                for (int i = 0; i < ca.length; i++) ia[i] = ca[i];
+                yield ia;
+            }
             case "intern"          -> s.intern();
             case "concat"          -> s.concat((String) args[0]);
             case "compareTo"       -> s.compareTo((String) args[0]);
