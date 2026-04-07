@@ -1,24 +1,13 @@
-add_executable(aijvm_tests
-    ClassFileTest.cpp
-    ${CMAKE_SOURCE_DIR}/src/ClassFile.cpp
-)
+# tests/CMakeLists.txt
 
-target_include_directories(aijvm_tests PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/include
-)
+# Find the GoogleTest package (assumes it is installed in your WSL environment)
+find_package(GTest REQUIRED)
 
-target_compile_definitions(aijvm_tests PRIVATE
-    TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
-)
+# Create the test executable
+add_executable(run_tests dummy_test.cpp)
 
-target_link_libraries(aijvm_tests PRIVATE
-    GTest::gtest_main
-)
+# Link GoogleTest and its main function
+target_link_libraries(run_tests GTest::gtest GTest::gtest_main)
 
-target_compile_options(aijvm_tests PRIVATE
-    $<$<CXX_COMPILER_ID:MSVC>:/W4>
-    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>
-)
-
-include(GoogleTest)
-gtest_discover_tests(aijvm_tests)
+# Register the test with CTest so `make test` or `ctest` works
+add_test(NAME AIJVM_Tests COMMAND run_tests)
