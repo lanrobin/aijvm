@@ -13,6 +13,18 @@ else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror -pedantic")
 endif()
 
+# --- spdlog via FetchContent ---
+include(FetchContent)
+FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG        v1.15.3
+)
+FetchContent_MakeAvailable(spdlog)
+
+# Enable SPDLOG_* macros to embed source location (file, line, function).
+add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
+
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
@@ -21,6 +33,7 @@ file(GLOB_RECURSE SOURCES "src/*.cpp")
 
 # Generate the executable
 add_executable(aijvm ${SOURCES})
+target_link_libraries(aijvm PRIVATE spdlog::spdlog)
 
 # Enable testing (GoogleTest is highly recommended for validating AI-generated code)
 enable_testing()

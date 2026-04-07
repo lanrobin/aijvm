@@ -8,7 +8,7 @@
 
 ## 2. Tech Stack & Coding Standards
 - **Language:** Strictly C++20.
-- **Cross-Platform Rule:** Always prioritize C++20 standard library features (e.g., `<filesystem>`, `<thread>`, `<chrono>`, `<mutex>`) over OS-specific APIs (like POSIX or WinAPI) to ensure cross-platform compilation via CMake.
+- **Cross-Platform Rule:** Always prioritize C++20 standard library features (e.g., `<filesystem>`, `<thread>`, `<chrono>`, `<mutex>`, `<string_view>`) over OS-specific APIs (like POSIX or WinAPI) to ensure cross-platform compilation via CMake.
 - **Modern C++ Practices:** - Use `std::span` for safe memory/buffer access (especially for ClassFile parsing).
   - Use `std::variant` and `std::optional` where applicable.
   - Use `<format>` for string formatting instead of C-style `printf`.

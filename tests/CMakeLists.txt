@@ -4,10 +4,15 @@
 find_package(GTest REQUIRED)
 
 # Create the test executable
-add_executable(run_tests dummy_test.cpp)
+add_executable(run_tests
+    dummy_test.cpp
+    command_line_parser_test.cpp
+    ${CMAKE_SOURCE_DIR}/src/cli/command_line_parser.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/logger.cpp
+)
 
-# Link GoogleTest and its main function
-target_link_libraries(run_tests GTest::gtest GTest::gtest_main)
+# Link GoogleTest, spdlog, and its main function
+target_link_libraries(run_tests GTest::gtest GTest::gtest_main spdlog::spdlog)
 
 # Register the test with CTest so `make test` or `ctest` works
 add_test(NAME AIJVM_Tests COMMAND run_tests)
