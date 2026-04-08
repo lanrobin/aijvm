@@ -1,0 +1,1 @@
+During the step 03-Claude-Prompt-jmod-file-reader, it forgets to updatethe pkg-config to file UbuntuRequirements.txt as this packages is installed when the first building error and fixed by the error messages. So I just reminded it.

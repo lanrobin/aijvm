@@ -1,4 +1,4 @@
 sudo apt update
-sudo apt install  build-essential git cmake gh pandoc gdb libgtest-dev openjdk-25-jdk openjdk-25-source openjdk-25-demo
+sudo apt install  build-essential git cmake gh pandoc gdb libgtest-dev openjdk-25-jdk openjdk-25-source openjdk-25-demo libzip-dev pkg-config
 # spdlog is fetched automatically by CMake FetchContent. Optional system install:
 # sudo apt install libspdlog-dev

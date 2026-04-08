@@ -25,6 +25,10 @@ FetchContent_MakeAvailable(spdlog)
 # Enable SPDLOG_* macros to embed source location (file, line, function).
 add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
 
+# --- libzip for JMOD/ZIP reading ---
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBZIP REQUIRED IMPORTED_TARGET libzip)
+
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
@@ -33,7 +37,7 @@ file(GLOB_RECURSE SOURCES "src/*.cpp")
 
 # Generate the executable
 add_executable(aijvm ${SOURCES})
-target_link_libraries(aijvm PRIVATE spdlog::spdlog)
+target_link_libraries(aijvm PRIVATE spdlog::spdlog PkgConfig::LIBZIP)
 
 # Enable testing (GoogleTest is highly recommended for validating AI-generated code)
 enable_testing()
