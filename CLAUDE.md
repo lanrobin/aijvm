@@ -14,6 +14,7 @@
   - Use `<format>` for string formatting instead of C-style `printf`.
   - Use smart pointers (`std::unique_ptr`, `std::shared_ptr`) for ownership management; avoid raw pointers unless for non-owning observation.
   - Use `<bit>` and `std::endian::big` for handling Java class file byte-order conversions.
+  - Use `<string_view>` where if a string is immutable.
 
 ## 3. Core Architectural Modules
 The JVM must implement the following core subsystems:
