@@ -21,6 +21,7 @@ add_executable(run_tests
     ${CMAKE_SOURCE_DIR}/src/runtime/frame.cpp
     ${CMAKE_SOURCE_DIR}/src/runtime/java_thread.cpp
     ${CMAKE_SOURCE_DIR}/src/runtime/interpreter.cpp
+    ${CMAKE_SOURCE_DIR}/src/runtime/heap.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/file_reader.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/logger.cpp
 )

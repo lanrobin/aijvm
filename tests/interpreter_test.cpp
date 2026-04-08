@@ -1,10 +1,12 @@
 #include <gtest/gtest.h>
 
 #include "runtime/interpreter.h"
+#include "runtime/heap.h"
 #include "runtime/java_thread.h"
 #include "runtime/frame.h"
 #include "runtime/slot.h"
 #include "classfile/class_file.h"
+#include "classloader/class_loader.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -48,20 +50,32 @@ static std::unique_ptr<Frame> make_bytecode_frame(
 }
 
 // ============================================================================
+// Test fixture: provides Heap + ClassLoader for Interpreter construction
+// ============================================================================
+class InterpreterTestFixture : public ::testing::Test {
+protected:
+    Heap heap_;
+    // ClassLoader with non-existent paths — fine for synthetic bytecode tests
+    aijvm::classloader::ClassLoader loader_{"/nonexistent", "/nonexistent"};
+
+    Interpreter make_interp() { return Interpreter(heap_, loader_); }
+};
+
+// ============================================================================
 // §6.5 iconst_<i> Tests
 // ============================================================================
 
-TEST(InterpreterTest, IconstM1) {
+TEST_F(InterpreterTestFixture, IconstM1) {
     // iconst_m1, return
     static const std::vector<std::uint8_t> code = {Opcode::ICONST_M1, Opcode::ISTORE_0, Opcode::RETURN};
     JavaThread thread;
     thread.push_frame(make_bytecode_frame(1, 1, code));
-    Interpreter interp;
+    auto interp = make_interp();
     interp.execute(thread);
     EXPECT_TRUE(thread.stack_empty());
 }
 
-TEST(InterpreterTest, IconstAll) {
+TEST_F(InterpreterTestFixture, IconstAll) {
     // Push iconst_0 through iconst_5, add them all, store result, return
     static const std::vector<std::uint8_t> code = {
         Opcode::ICONST_0,   // push 0
@@ -82,7 +96,7 @@ TEST(InterpreterTest, IconstAll) {
     thread.push_frame(make_bytecode_frame(1, 2, code));
 
     // Execute and verify the frame is popped
-    Interpreter interp;
+    auto interp = make_interp();
     interp.execute(thread);
     EXPECT_TRUE(thread.stack_empty());
 }
@@ -91,19 +105,19 @@ TEST(InterpreterTest, IconstAll) {
 // §6.5 bipush Test
 // ============================================================================
 
-TEST(InterpreterTest, Bipush) {
+TEST_F(InterpreterTestFixture, Bipush) {
     // bipush 42, istore_0, return
     static const std::vector<std::uint8_t> code = {
         Opcode::BIPUSH, 42, Opcode::ISTORE_0, Opcode::RETURN
     };
     JavaThread thread;
     thread.push_frame(make_bytecode_frame(1, 1, code));
-    Interpreter interp;
+    auto interp = make_interp();
     interp.execute(thread);
     EXPECT_TRUE(thread.stack_empty());
 }
 
-TEST(InterpreterTest, BipushNegative) {
+TEST_F(InterpreterTestFixture, BipushNegative) {
     // bipush -10 (0xF6 = 246 unsigned = -10 signed), istore_0, return
     static const std::vector<std::uint8_t> code = {
         Opcode::BIPUSH, 0xF6, Opcode::ISTORE_0, Opcode::RETURN
@@ -111,7 +125,7 @@ TEST(InterpreterTest, BipushNegative) {
     JavaThread thread;
     thread.push_frame(make_bytecode_frame(1, 1, code));
 
-    Interpreter interp;
+    auto interp = make_interp();
     interp.execute(thread);
     EXPECT_TRUE(thread.stack_empty());
 }
@@ -120,7 +134,7 @@ TEST(InterpreterTest, BipushNegative) {
 // §6.5 iload / istore Tests
 // ============================================================================
 
-TEST(InterpreterTest, IloadIstore) {
+TEST_F(InterpreterTestFixture, IloadIstore) {
     // iconst_5, istore 4, iload 4, istore_0, return
     static const std::vector<std::uint8_t> code = {
         Opcode::ICONST_5,
@@ -131,12 +145,12 @@ TEST(InterpreterTest, IloadIstore) {
     };
     JavaThread thread;
     thread.push_frame(make_bytecode_frame(5, 1, code));
-    Interpreter interp;
+    auto interp = make_interp();
     interp.execute(thread);
     EXPECT_TRUE(thread.stack_empty());
 }
 
-TEST(InterpreterTest, IloadNVariants) {
+TEST_F(InterpreterTestFixture, IloadNVariants) {
     // Set locals 0-3 via istore_<n>, then load them all with iload_<n> and add
     static const std::vector<std::uint8_t> code = {
         Opcode::ICONST_1, Opcode::ISTORE_0,   // local[0] = 1
@@ -155,7 +169,7 @@ TEST(InterpreterTest, IloadNVariants) {
     };
     JavaThread thread;
     thread.push_frame(make_bytecode_frame(4, 2, code));
-    Interpreter interp;
+    auto interp = make_interp();
     interp.execute(thread);
     EXPECT_TRUE(thread.stack_empty());
 }
@@ -164,7 +178,7 @@ TEST(InterpreterTest, IloadNVariants) {
 // §6.5 iadd Tests
 // ============================================================================
 
-TEST(InterpreterTest, IaddOverflow) {
+TEST_F(InterpreterTestFixture, IaddOverflow) {
     // §6.5 iadd: "If overflow occurs, then the sign of the result may not be
     // the same as the sign of the mathematical sum. Despite the fact that
     // overflow may occur, execution of an iadd instruction never throws a
@@ -179,7 +193,7 @@ TEST(InterpreterTest, IaddOverflow) {
     };
     JavaThread thread;
     thread.push_frame(make_bytecode_frame(1, 2, code));
-    Interpreter interp;
+    auto interp = make_interp();
     EXPECT_NO_THROW(interp.execute(thread));
 }
 
@@ -187,7 +201,7 @@ TEST(InterpreterTest, IaddOverflow) {
 // §6.5 ireturn Tests
 // ============================================================================
 
-TEST(InterpreterTest, Ireturn) {
+TEST_F(InterpreterTestFixture, Ireturn) {
     // Simulate method invocation: caller frame calls a "method" that returns 42.
     // Callee: bipush 42, ireturn
     static const std::vector<std::uint8_t> callee_code = {
@@ -208,19 +222,19 @@ TEST(InterpreterTest, Ireturn) {
     // Push callee frame on top
     thread.push_frame(make_bytecode_frame(1, 1, callee_code));
 
-    Interpreter interp;
+    auto interp = make_interp();
     interp.execute(thread);
     EXPECT_TRUE(thread.stack_empty());
 }
 
-TEST(InterpreterTest, IreturnNoCallerFrame) {
+TEST_F(InterpreterTestFixture, IreturnNoCallerFrame) {
     // ireturn when there's only one frame — return value is discarded
     static const std::vector<std::uint8_t> code = {
         Opcode::ICONST_5, Opcode::IRETURN
     };
     JavaThread thread;
     thread.push_frame(make_bytecode_frame(1, 1, code));
-    Interpreter interp;
+    auto interp = make_interp();
     interp.execute(thread);
     EXPECT_TRUE(thread.stack_empty());
 }
@@ -229,11 +243,11 @@ TEST(InterpreterTest, IreturnNoCallerFrame) {
 // §6.5 return (void) Test
 // ============================================================================
 
-TEST(InterpreterTest, ReturnVoid) {
+TEST_F(InterpreterTestFixture, ReturnVoid) {
     static const std::vector<std::uint8_t> code = {Opcode::RETURN};
     JavaThread thread;
     thread.push_frame(make_bytecode_frame(1, 1, code));
-    Interpreter interp;
+    auto interp = make_interp();
     interp.execute(thread);
     EXPECT_TRUE(thread.stack_empty());
 }
@@ -242,13 +256,13 @@ TEST(InterpreterTest, ReturnVoid) {
 // §6.5 nop Test
 // ============================================================================
 
-TEST(InterpreterTest, Nop) {
+TEST_F(InterpreterTestFixture, Nop) {
     static const std::vector<std::uint8_t> code = {
         Opcode::NOP, Opcode::NOP, Opcode::RETURN
     };
     JavaThread thread;
     thread.push_frame(make_bytecode_frame(1, 1, code));
-    Interpreter interp;
+    auto interp = make_interp();
     interp.execute(thread);
     EXPECT_TRUE(thread.stack_empty());
 }
@@ -257,12 +271,12 @@ TEST(InterpreterTest, Nop) {
 // Error Handling Tests
 // ============================================================================
 
-TEST(InterpreterTest, UnimplementedOpcode) {
+TEST_F(InterpreterTestFixture, UnimplementedOpcode) {
     // 0xFE is reserved/impdep1 — should throw InterpreterError
     static const std::vector<std::uint8_t> code = {0xFE};
     JavaThread thread;
     thread.push_frame(make_bytecode_frame(1, 1, code));
-    Interpreter interp;
+    auto interp = make_interp();
     EXPECT_THROW(interp.execute(thread), InterpreterError);
 }
 
@@ -282,7 +296,7 @@ TEST(InterpreterTest, UnimplementedOpcode) {
 //  11: istore_3
 //  12: return
 
-TEST(InterpreterTest, HelloAddBytecodeManual) {
+TEST_F(InterpreterTestFixture, HelloAddBytecodeManual) {
     // Reproduce the exact HelloAdd.main bytecode
     static const std::vector<std::uint8_t> code = {
         Opcode::ICONST_5,       // 0: push 5
@@ -304,7 +318,7 @@ TEST(InterpreterTest, HelloAddBytecodeManual) {
     thread.push_frame(std::move(frame));
 
     // Execute step-by-step to verify intermediate state
-    Interpreter interp;
+    auto interp = make_interp();
 
     // Execute: iconst_5 → push 5
     ASSERT_TRUE(interp.execute_instruction(thread, *thread.current_frame()));
@@ -354,7 +368,7 @@ TEST(InterpreterTest, HelloAddBytecodeManual) {
 // Integration Test: Parse and execute HelloAdd.class from real .class file
 // ============================================================================
 
-TEST(InterpreterTest, HelloAddClassFile) {
+TEST_F(InterpreterTestFixture, HelloAddClassFile) {
     auto class_path = get_test_class_path() / "HelloAdd.class";
     if (!std::filesystem::exists(class_path)) {
         GTEST_SKIP() << "HelloAdd.class not found at " << class_path;
@@ -394,7 +408,7 @@ TEST(InterpreterTest, HelloAddClassFile) {
     thread.push_frame(std::move(frame));
 
     // Execute
-    Interpreter interp;
+    auto interp = make_interp();
     interp.execute(thread);
 
     // After execution, the frame should be popped (void return)

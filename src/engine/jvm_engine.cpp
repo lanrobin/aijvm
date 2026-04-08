@@ -14,7 +14,8 @@ using namespace runtime;
 
 JVMEngine::JVMEngine(const std::filesystem::path& boot_jmod_path,
                      const std::filesystem::path& class_path)
-    : class_loader_(boot_jmod_path, class_path) {}
+    : class_loader_(boot_jmod_path, class_path),
+      interpreter_(heap_, class_loader_) {}
 
 void JVMEngine::run(const std::string& main_class,
                     [[maybe_unused]] const std::vector<std::string>& args) {

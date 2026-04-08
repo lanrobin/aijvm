@@ -1,6 +1,7 @@
 #pragma once
 
 #include "classloader/class_loader.h"
+#include "runtime/heap.h"
 #include "runtime/interpreter.h"
 #include "runtime/java_thread.h"
 
@@ -23,9 +24,15 @@ class JVMError : public std::runtime_error {
 // Ties together the Class Loader (§5.3), Runtime Data Areas (§2.5), and
 // Execution Engine (§2.12) into a single entry point that:
 //   1. Initializes the ClassLoader with boot jmod path and classpath.
-//   2. Loads the main class and locates its `main([Ljava/lang/String;)V` method.
-//   3. Creates a JavaThread with an initial Frame from the Code attribute.
-//   4. Runs the Interpreter dispatch loop.
+//   2. Creates the shared Heap (§2.5.3) with a GC strategy.
+//   3. Loads the main class and locates its `main([Ljava/lang/String;)V` method.
+//   4. Creates a JavaThread with an initial Frame from the Code attribute.
+//   5. Runs the Interpreter dispatch loop.
+//
+// The ClassLoader supports on-demand loading: classes referenced during
+// execution (via invokevirtual, new, etc.) are loaded lazily through the
+// Interpreter's class_loader_ reference rather than requiring upfront
+// recursive loading.
 // ============================================================================
 
 class JVMEngine {
@@ -42,6 +49,7 @@ public:
 
 private:
     classloader::ClassLoader class_loader_;
+    runtime::Heap heap_;
     runtime::Interpreter interpreter_;
 };
 
