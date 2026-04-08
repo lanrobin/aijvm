@@ -270,7 +270,7 @@ TEST(ClassFileTest, HelloWorldHasStringConstant) {
     auto data = load_class_file(path);
     ClassFile cf(std::move(data));
 
-    // Should contain the string "Hello, World!" in the constant pool via CONSTANT_String
+    // Should contain the string "Hello, World! The sum of " in the constant pool via CONSTANT_String
     bool found_hello = false;
     for (std::size_t i = 1; i < cf.constant_pool.size(); ++i) {
         if (!cf.constant_pool[i]) continue;
@@ -278,7 +278,7 @@ TEST(ClassFileTest, HelloWorldHasStringConstant) {
             auto* str = dynamic_cast<const CONSTANT_String_info*>(
                 cf.constant_pool[i].get());
             const auto& value = cf.get_utf8(str->string_index);
-            if (value == "Hello, World!") {
+            if (value.find("Hello, World!") != std::string::npos) {
                 found_hello = true;
             }
         }

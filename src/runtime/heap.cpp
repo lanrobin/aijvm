@@ -163,6 +163,8 @@ void Heap::init_system_classes() {
     set_class_init_state("java/io/PrintStream", ClassInitState::Initialized);
     set_class_init_state("java/lang/String", ClassInitState::Initialized);
     set_class_init_state("java/lang/Class", ClassInitState::Initialized);
+    set_class_init_state("java/lang/StringBuilder", ClassInitState::Initialized);
+    set_class_init_state("java/lang/AbstractStringBuilder", ClassInitState::Initialized);
 }
 
 Heap::ClassInitState Heap::get_class_init_state(const std::string& class_name) const {

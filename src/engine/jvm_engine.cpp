@@ -1,7 +1,9 @@
 #include "engine/jvm_engine.h"
 #include "classfile/class_file.h"
 #include "natives/java_lang_Object.h"
+#include "natives/java_lang_Class.h"
 #include "natives/java_lang_System.h"
+#include "natives/java_lang_StringBuilder.h"
 #include "natives/java_io_PrintStream.h"
 #include "runtime/frame.h"
 #include "utils/logger.h"
@@ -21,7 +23,9 @@ JVMEngine::JVMEngine(const std::filesystem::path& boot_jmod_path,
       interpreter_(heap_, class_loader_, native_registry_) {
     // Register all built-in native methods
     natives::register_java_lang_Object(native_registry_);
+    natives::register_java_lang_Class(native_registry_);
     natives::register_java_lang_System(native_registry_);
+    natives::register_java_lang_StringBuilder(native_registry_);
     natives::register_java_io_PrintStream(native_registry_);
 
     // Initialize well-known static fields (System.out, System.err)
