@@ -1,0 +1,1 @@
+1. Please try to add a static method test_read_class_from_jmod in main.cpp and following code to this method and call it from main.cpp, read from java.base.jmod from the --bj parameter folder and then read the content of classes/java/util/ArrayList.class and then try to parse this java file and pring all its parent class name and implemented interfaces names.
