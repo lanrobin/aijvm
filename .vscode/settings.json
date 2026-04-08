@@ -3,6 +3,8 @@
         "./tests/run_tests": true,
         "make": true,
         "nproc": true,
-        "./aijvm": true
+        "./aijvm": true,
+        "cmake": true,
+        "javap": true
     }
 }
