@@ -10,9 +10,11 @@ add_executable(run_tests
     jmod_reader_test.cpp
     class_file_parser_test.cpp
     file_reader_test.cpp
+    class_loader_test.cpp
     ${CMAKE_SOURCE_DIR}/src/cli/command_line_parser.cpp
     ${CMAKE_SOURCE_DIR}/src/classfile/jmod_reader.cpp
     ${CMAKE_SOURCE_DIR}/src/classfile/class_file.cpp
+    ${CMAKE_SOURCE_DIR}/src/classloader/class_loader.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/file_reader.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/logger.cpp
 )
