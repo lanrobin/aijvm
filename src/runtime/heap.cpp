@@ -155,6 +155,23 @@ void Heap::init_system_classes() {
     // Create System.err — same as out for now
     auto* err_stream = allocate_object("java/io/PrintStream");
     set_static_field("java/lang/System.err", static_cast<void*>(err_stream));
+
+    // Mark well-known system classes as already initialized
+    // (they don't have real <clinit> methods we can execute)
+    set_class_init_state("java/lang/Object", ClassInitState::Initialized);
+    set_class_init_state("java/lang/System", ClassInitState::Initialized);
+    set_class_init_state("java/io/PrintStream", ClassInitState::Initialized);
+    set_class_init_state("java/lang/String", ClassInitState::Initialized);
+    set_class_init_state("java/lang/Class", ClassInitState::Initialized);
+}
+
+Heap::ClassInitState Heap::get_class_init_state(const std::string& class_name) const {
+    auto it = class_init_states_.find(class_name);
+    return it != class_init_states_.end() ? it->second : ClassInitState::Uninitialized;
+}
+
+void Heap::set_class_init_state(const std::string& class_name, ClassInitState state) {
+    class_init_states_[class_name] = state;
 }
 
 } // namespace aijvm::runtime

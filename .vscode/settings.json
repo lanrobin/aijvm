@@ -5,6 +5,8 @@
         "nproc": true,
         "./aijvm": true,
         "cmake": true,
-        "javap": true
+        "javap": true,
+        "javac": true,
+        "strings": true
     }
 }

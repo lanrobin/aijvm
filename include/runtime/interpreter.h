@@ -81,7 +81,7 @@ private:
                          std::uint8_t opcode, std::uint16_t cp_index);
 
     /// §6.5 new — allocate object instance
-    void do_new(Frame& frame, std::uint16_t cp_index);
+    void do_new(JavaThread& thread, Frame& frame, std::uint16_t cp_index);
 
     /// §6.5 newarray — allocate primitive array
     void do_newarray(Frame& frame, std::uint8_t atype);
@@ -95,6 +95,20 @@ private:
     /// §6.5 checkcast / instanceof
     void do_checkcast(Frame& frame, std::uint16_t cp_index);
     void do_instanceof(Frame& frame, std::uint16_t cp_index);
+
+    // ===== §5.5 Class Initialization =====
+
+    /// Ensure a class is initialized before use. Per §5.5:
+    /// "A class or interface C may be initialized only as a result of:
+    ///  - The execution of new, getstatic, putstatic, or invokestatic that
+    ///    references C."
+    ///
+    /// This method:
+    ///  1. Checks the class init state in the Heap
+    ///  2. If Uninitialized, recursively initializes the superclass first
+    ///  3. Finds <clinit> in the ClassFile and executes it synchronously
+    ///  4. Transitions class state: Uninitialized → Initializing → Initialized
+    void ensure_initialized(JavaThread& thread, std::string_view class_name);
 };
 
 } // namespace aijvm::runtime

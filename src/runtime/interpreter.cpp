@@ -774,7 +774,7 @@ bool Interpreter::execute_instruction(JavaThread& thread, Frame& frame) {
 
     case Opcode::NEW: {
         auto cp_index = frame.read_u2();
-        do_new(frame, cp_index);
+        do_new(thread, frame, cp_index);
         break;
     }
 
@@ -947,6 +947,11 @@ void Interpreter::do_invoke(JavaThread& thread, Frame& frame,
         return;
     }
 
+    // §5.5: Ensure class is initialized for invokestatic
+    if (opcode == Opcode::INVOKESTATIC) {
+        ensure_initialized(thread, class_name);
+    }
+
     // §5.3: On-demand class loading
     auto target_cf = class_loader_.load_class(class_name);
     if (!target_cf) {
@@ -1063,7 +1068,7 @@ void Interpreter::do_invoke(JavaThread& thread, Frame& frame,
     thread.push_frame(std::move(new_frame));
 }
 
-void Interpreter::do_field_access([[maybe_unused]] JavaThread& thread, Frame& frame,
+void Interpreter::do_field_access(JavaThread& thread, Frame& frame,
                                   std::uint8_t opcode, std::uint16_t cp_index) {
     const auto& cf = frame.get_class_file();
     auto* ref = dynamic_cast<const CONSTANT_Fieldref_info*>(cf.constant_pool[cp_index].get());
@@ -1080,6 +1085,11 @@ void Interpreter::do_field_access([[maybe_unused]] JavaThread& thread, Frame& fr
     const auto& field_name = cf.get_utf8(nat->name_index);
     const auto& field_desc = cf.get_utf8(nat->descriptor_index);
     std::string full_name = std::string(class_name) + "." + std::string(field_name);
+
+    // §5.5: Ensure class is initialized for static field access
+    if (opcode == Opcode::GETSTATIC || opcode == Opcode::PUTSTATIC) {
+        ensure_initialized(thread, class_name);
+    }
 
     // On-demand class loading
     auto target_cf = class_loader_.load_class(class_name);
@@ -1156,14 +1166,14 @@ void Interpreter::do_field_access([[maybe_unused]] JavaThread& thread, Frame& fr
     }
 }
 
-void Interpreter::do_new(Frame& frame, std::uint16_t cp_index) {
+void Interpreter::do_new(JavaThread& thread, Frame& frame, std::uint16_t cp_index) {
     const auto& cf = frame.get_class_file();
     auto* ci = dynamic_cast<const CONSTANT_Class_info*>(cf.constant_pool[cp_index].get());
     if (!ci) throw InterpreterError(std::format("new: cp index {} not a Class", cp_index));
     const auto& class_name = cf.get_utf8(ci->name_index);
 
-    // On-demand class loading
-    (void)class_loader_.load_class(class_name);
+    // §5.5: Ensure class is initialized before instantiation
+    ensure_initialized(thread, class_name);
 
     auto* obj = heap_.allocate_object(class_name);
     frame.push_ref(obj);
@@ -1216,6 +1226,82 @@ void Interpreter::do_instanceof(Frame& frame, std::uint16_t cp_index) {
     auto* ref = frame.pop_ref();
     // Simplified: null → 0, non-null → 1
     frame.push_int(ref != nullptr ? 1 : 0);
+}
+
+// ============================================================================
+// §5.5 Class Initialization
+// ============================================================================
+
+void Interpreter::ensure_initialized(JavaThread& thread, std::string_view class_name) {
+    auto state = heap_.get_class_init_state(std::string(class_name));
+
+    if (state == Heap::ClassInitState::Initialized ||
+        state == Heap::ClassInitState::Initializing) {
+        // Already initialized or being initialized (re-entrant guard)
+        return;
+    }
+
+    // Load the class
+    auto cf = class_loader_.load_class(class_name);
+    if (!cf) {
+        // System/bootstrap class without a loadable .class file — skip
+        heap_.set_class_init_state(std::string(class_name),
+                                   Heap::ClassInitState::Initialized);
+        return;
+    }
+
+    // §5.5 Step 7: Recursively initialize the superclass first
+    if (cf->super_class != 0) {
+        auto* super_cls = dynamic_cast<const CONSTANT_Class_info*>(
+            cf->constant_pool[cf->super_class].get());
+        if (super_cls) {
+            const auto& super_name = cf->get_utf8(super_cls->name_index);
+            ensure_initialized(thread, super_name);
+        }
+    }
+
+    // Mark as Initializing (re-entrant guard for circular dependencies)
+    heap_.set_class_init_state(std::string(class_name),
+                               Heap::ClassInitState::Initializing);
+
+    // Find <clinit> method
+    const method_info* clinit = nullptr;
+    for (const auto& m : cf->methods) {
+        if (cf->get_utf8(m.name_index) == "<clinit>" &&
+            cf->get_utf8(m.descriptor_index) == "()V") {
+            clinit = &m;
+            break;
+        }
+    }
+
+    if (clinit) {
+        // Find Code attribute
+        const Code_attribute* code_attr = nullptr;
+        for (const auto& attr : clinit->attributes) {
+            code_attr = dynamic_cast<const Code_attribute*>(attr.get());
+            if (code_attr) break;
+        }
+
+        if (code_attr) {
+            // Create a frame for <clinit> and execute it synchronously
+            auto frame = std::make_unique<Frame>(
+                cf, clinit,
+                code_attr->max_locals, code_attr->max_stack,
+                std::span<const std::uint8_t>(code_attr->code));
+
+            thread.push_frame(std::move(frame));
+
+            // Execute <clinit> to completion within the current thread
+            while (thread.current_frame() &&
+                   thread.current_frame()->get_bytecode().data() == code_attr->code.data()) {
+                (void)execute_instruction(thread, *thread.current_frame());
+            }
+        }
+    }
+
+    // Mark as Initialized
+    heap_.set_class_init_state(std::string(class_name),
+                               Heap::ClassInitState::Initialized);
 }
 
 } // namespace aijvm::runtime

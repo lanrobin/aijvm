@@ -171,10 +171,31 @@ public:
     /// Called once during JVM boot.
     void init_system_classes();
 
+    // ===== §5.5 Class Initialization State Tracking =====
+    // "Initialization of a class or interface consists of executing its class
+    // or interface initialization method (<clinit>)." (§5.5)
+    //
+    // State machine per §5.5:
+    //   Uninitialized → Initializing → Initialized
+    //   (Error state omitted for simplicity)
+
+    enum class ClassInitState : std::uint8_t {
+        Uninitialized,  ///< <clinit> has not been invoked
+        Initializing,   ///< <clinit> is currently executing (on some thread)
+        Initialized     ///< <clinit> has completed successfully
+    };
+
+    /// Get the initialization state of a class.
+    [[nodiscard]] ClassInitState get_class_init_state(const std::string& class_name) const;
+
+    /// Set the initialization state of a class.
+    void set_class_init_state(const std::string& class_name, ClassInitState state);
+
 private:
     std::vector<std::unique_ptr<JObject>> objects_;
     std::unique_ptr<GarbageCollector> gc_;
     std::unordered_map<std::string, FieldValue> static_fields_;
+    std::unordered_map<std::string, ClassInitState> class_init_states_;
 };
 
 } // namespace aijvm::runtime
