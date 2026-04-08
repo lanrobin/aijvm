@@ -138,4 +138,23 @@ std::size_t Heap::object_count() const noexcept {
     return objects_.size();
 }
 
+void Heap::set_static_field(const std::string& key, FieldValue value) {
+    static_fields_[key] = std::move(value);
+}
+
+const FieldValue* Heap::get_static_field(const std::string& key) const {
+    auto it = static_fields_.find(key);
+    return it != static_fields_.end() ? &it->second : nullptr;
+}
+
+void Heap::init_system_classes() {
+    // Create System.out — a sentinel PrintStream object
+    auto* out_stream = allocate_object("java/io/PrintStream");
+    set_static_field("java/lang/System.out", static_cast<void*>(out_stream));
+
+    // Create System.err — same as out for now
+    auto* err_stream = allocate_object("java/io/PrintStream");
+    set_static_field("java/lang/System.err", static_cast<void*>(err_stream));
+}
+
 } // namespace aijvm::runtime

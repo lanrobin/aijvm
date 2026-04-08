@@ -2,6 +2,7 @@
 
 #include "runtime/opcode.h"
 #include "runtime/heap.h"
+#include "runtime/native_registry.h"
 #include "runtime/java_thread.h"
 
 #include <cstdint>
@@ -44,9 +45,11 @@ class NativeMethodNotFoundError : public std::runtime_error {
 class Interpreter {
 public:
     /// Construct interpreter with references to shared subsystems.
-    /// @param heap          Shared heap for object allocation (§2.5.3)
-    /// @param class_loader  For on-demand class loading during resolution (§5.3)
-    Interpreter(Heap& heap, classloader::ClassLoader& class_loader);
+    /// @param heap            Shared heap for object allocation (§2.5.3)
+    /// @param class_loader    For on-demand class loading during resolution (§5.3)
+    /// @param native_registry Registry of native method bindings
+    Interpreter(Heap& heap, classloader::ClassLoader& class_loader,
+                NativeMethodRegistry& native_registry);
 
     /// Execute the current frame on the given thread until the method returns.
     /// For `return` (void): pops the frame and returns to caller.
@@ -62,6 +65,7 @@ public:
 private:
     Heap& heap_;
     classloader::ClassLoader& class_loader_;
+    NativeMethodRegistry& native_registry_;
 
     // --- Instruction group handlers (reduce switch-case bloat) ---
 

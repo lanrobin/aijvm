@@ -3,6 +3,7 @@
 #include "classloader/class_loader.h"
 #include "runtime/heap.h"
 #include "runtime/interpreter.h"
+#include "runtime/native_registry.h"
 #include "runtime/java_thread.h"
 
 #include <filesystem>
@@ -50,6 +51,7 @@ public:
 private:
     classloader::ClassLoader class_loader_;
     runtime::Heap heap_;
+    runtime::NativeMethodRegistry native_registry_;
     runtime::Interpreter interpreter_;
 };
 

@@ -155,9 +155,26 @@ public:
     /// Total number of live objects on the heap.
     [[nodiscard]] std::size_t object_count() const noexcept;
 
+    // ===== §2.5.4 Method Area — Static Field Storage =====
+    // "The method area stores per-class structures: run-time constant pool,
+    // field and method data..." (§2.5.4)
+    // We co-locate static field storage in the Heap for simplicity.
+
+    /// Set a static field value.
+    /// @param key Format: "class_name.field_name"
+    void set_static_field(const std::string& key, FieldValue value);
+
+    /// Get a static field value, or nullptr-equivalent default if not set.
+    [[nodiscard]] const FieldValue* get_static_field(const std::string& key) const;
+
+    /// Initialize well-known static fields (e.g. System.out).
+    /// Called once during JVM boot.
+    void init_system_classes();
+
 private:
     std::vector<std::unique_ptr<JObject>> objects_;
     std::unique_ptr<GarbageCollector> gc_;
+    std::unordered_map<std::string, FieldValue> static_fields_;
 };
 
 } // namespace aijvm::runtime

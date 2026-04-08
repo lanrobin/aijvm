@@ -7,6 +7,7 @@
 #include "runtime/slot.h"
 #include "classfile/class_file.h"
 #include "classloader/class_loader.h"
+#include "runtime/native_registry.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -57,8 +58,9 @@ protected:
     Heap heap_;
     // ClassLoader with non-existent paths — fine for synthetic bytecode tests
     aijvm::classloader::ClassLoader loader_{"/nonexistent", "/nonexistent"};
+    NativeMethodRegistry native_registry_;
 
-    Interpreter make_interp() { return Interpreter(heap_, loader_); }
+    Interpreter make_interp() { return Interpreter(heap_, loader_, native_registry_); }
 };
 
 // ============================================================================

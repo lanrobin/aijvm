@@ -13,8 +13,9 @@ namespace aijvm::runtime {
 
 using namespace classfile;
 
-Interpreter::Interpreter(Heap& heap, classloader::ClassLoader& class_loader)
-    : heap_(heap), class_loader_(class_loader) {}
+Interpreter::Interpreter(Heap& heap, classloader::ClassLoader& class_loader,
+                         NativeMethodRegistry& native_registry)
+    : heap_(heap), class_loader_(class_loader), native_registry_(native_registry) {}
 
 void Interpreter::execute(JavaThread& thread) {
     while (auto* frame = thread.current_frame()) {
@@ -935,6 +936,17 @@ void Interpreter::do_invoke(JavaThread& thread, Frame& frame,
     const auto& method_name = cf.get_utf8(nat->name_index);
     const auto& method_desc = cf.get_utf8(nat->descriptor_index);
 
+    // Check native registry FIRST — if a native binding exists, use it directly
+    // without attempting class loading or method resolution. This handles:
+    //   - System classes we can't fully execute (PrintStream, Object, etc.)
+    //   - Methods with ACC_NATIVE flag in their .class files
+    auto native_key = NativeMethodRegistry::make_key(class_name, method_name, method_desc);
+    auto* native_fn = native_registry_.find(native_key);
+    if (native_fn) {
+        (*native_fn)(thread, frame, heap_);
+        return;
+    }
+
     // §5.3: On-demand class loading
     auto target_cf = class_loader_.load_class(class_name);
     if (!target_cf) {
@@ -957,7 +969,9 @@ void Interpreter::do_invoke(JavaThread& thread, Frame& frame,
             "NoSuchMethodError: {}.{}:{}", class_name, method_name, method_desc));
     }
 
-    // Check for native method
+    // Check for native method (ACC_NATIVE flag set in .class)
+    // We already checked the native registry at the top, so if we reach here
+    // with ACC_NATIVE, the method is truly unregistered.
     if (target_method->access_flags & MethodAccess::ACC_NATIVE) {
         throw NativeMethodNotFoundError(std::format(
             "NativeMethodNotFoundError: {}.{}:{}", class_name, method_name, method_desc));
@@ -1072,30 +1086,35 @@ void Interpreter::do_field_access([[maybe_unused]] JavaThread& thread, Frame& fr
 
     switch (opcode) {
     case Opcode::GETSTATIC: {
-        // For now, static fields are stored on a per-class JObject sentinel
-        // We'll create one on demand
-        // Simplified: push default value based on descriptor
-        if (field_desc[0] == 'I' || field_desc[0] == 'Z' || field_desc[0] == 'B' ||
-            field_desc[0] == 'C' || field_desc[0] == 'S') {
-            frame.push_int(0);
-        } else if (field_desc[0] == 'J') {
-            frame.push_long(0LL);
-        } else if (field_desc[0] == 'F') {
-            frame.push_float(0.0f);
-        } else if (field_desc[0] == 'D') {
-            frame.push_double(0.0);
+        // §2.5.4: Check static field storage in the heap
+        auto* stored = heap_.get_static_field(full_name);
+        if (stored) {
+            if (auto* v = std::get_if<std::int32_t>(stored)) frame.push_int(*v);
+            else if (auto* v = std::get_if<std::int64_t>(stored)) frame.push_long(*v);
+            else if (auto* v = std::get_if<float>(stored)) frame.push_float(*v);
+            else if (auto* v = std::get_if<double>(stored)) frame.push_double(*v);
+            else if (auto* v = std::get_if<void*>(stored)) frame.push_ref(*v);
         } else {
-            frame.push_ref(nullptr);
+            // No stored value — push type-appropriate default
+            if (field_desc[0] == 'I' || field_desc[0] == 'Z' || field_desc[0] == 'B' ||
+                field_desc[0] == 'C' || field_desc[0] == 'S') frame.push_int(0);
+            else if (field_desc[0] == 'J') frame.push_long(0LL);
+            else if (field_desc[0] == 'F') frame.push_float(0.0f);
+            else if (field_desc[0] == 'D') frame.push_double(0.0);
+            else frame.push_ref(nullptr);
         }
         break;
     }
     case Opcode::PUTSTATIC: {
-        // Pop and discard for now (no real static storage yet)
-        if (field_desc[0] == 'J') (void)frame.pop_long();
-        else if (field_desc[0] == 'D') (void)frame.pop_double();
-        else if (field_desc[0] == 'F') (void)frame.pop_float();
-        else if (field_desc[0] == 'L' || field_desc[0] == '[') (void)frame.pop_ref();
-        else (void)frame.pop_int();
+        // Store static field value
+        FieldValue fv;
+        if (field_desc[0] == 'I' || field_desc[0] == 'Z' || field_desc[0] == 'B' ||
+            field_desc[0] == 'C' || field_desc[0] == 'S') fv = frame.pop_int();
+        else if (field_desc[0] == 'J') fv = frame.pop_long();
+        else if (field_desc[0] == 'F') fv = frame.pop_float();
+        else if (field_desc[0] == 'D') fv = frame.pop_double();
+        else fv = frame.pop_ref();
+        heap_.set_static_field(full_name, fv);
         break;
     }
     case Opcode::GETFIELD: {
