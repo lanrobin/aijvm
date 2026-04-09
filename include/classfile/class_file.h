@@ -635,6 +635,20 @@ public:
 
     // Helper: get UTF-8 string from constant pool by index
     [[nodiscard]] const std::string& get_utf8(std::uint16_t index) const;
+
+    // ===== §5.5 Class Initialization State =====
+    // Per-class state machine tracking <clinit> execution.
+    // Stored directly on ClassFile so it follows the class through the
+    // ClassLoader cache — no separate global map needed.
+    enum class InitState : std::uint8_t {
+        Uninitialized,  ///< <clinit> has not been invoked
+        Initializing,   ///< <clinit> is currently executing
+        Initialized     ///< <clinit> has completed successfully
+    };
+
+    /// Current initialization state. Defaults to Uninitialized.
+    /// Mutable because ensure_initialized may be called with a shared_ptr<const ClassFile>.
+    mutable InitState init_state = InitState::Uninitialized;
 };
 
 } // namespace aijvm::classfile

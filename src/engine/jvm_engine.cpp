@@ -37,6 +37,22 @@ JVMEngine::JVMEngine(const std::filesystem::path& boot_jmod_path,
 
     // Initialize well-known static fields (System.out, System.err)
     heap_.init_system_classes();
+
+    // Pre-mark system classes as Initialized to prevent executing their
+    // real <clinit> bytecode (which depends on deep JDK internals we don't support).
+    // These classes are fully handled by native method bindings.
+    static constexpr std::string_view system_classes[] = {
+        "java/lang/Object", "java/lang/System", "java/io/PrintStream",
+        "java/lang/String", "java/lang/Class", "java/lang/StringBuilder",
+        "java/lang/AbstractStringBuilder", "java/lang/Thread",
+        "java/lang/ThreadGroup", "java/lang/Runnable",
+    };
+    for (auto cls : system_classes) {
+        auto cf = class_loader_.load_class(cls);
+        if (cf) {
+            cf->init_state = ClassFile::InitState::Initialized;
+        }
+    }
 }
 
 void JVMEngine::run(const std::string& main_class,

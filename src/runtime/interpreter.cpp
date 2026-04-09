@@ -1271,20 +1271,16 @@ void Interpreter::do_instanceof(Frame& frame, std::uint16_t cp_index) {
 // ============================================================================
 
 void Interpreter::ensure_initialized(JavaThread& thread, std::string_view class_name) {
-    auto state = heap_.get_class_init_state(std::string(class_name));
-
-    if (state == Heap::ClassInitState::Initialized ||
-        state == Heap::ClassInitState::Initializing) {
-        // Already initialized or being initialized (re-entrant guard)
-        return;
-    }
-
-    // Load the class
+    // Load the class first — we need it to check/set init_state
     auto cf = class_loader_.load_class(class_name);
     if (!cf) {
         // System/bootstrap class without a loadable .class file — skip
-        heap_.set_class_init_state(std::string(class_name),
-                                   Heap::ClassInitState::Initialized);
+        return;
+    }
+
+    // §5.5: Check initialization state on the ClassFile itself
+    if (cf->init_state == ClassFile::InitState::Initialized ||
+        cf->init_state == ClassFile::InitState::Initializing) {
         return;
     }
 
@@ -1299,8 +1295,7 @@ void Interpreter::ensure_initialized(JavaThread& thread, std::string_view class_
     }
 
     // Mark as Initializing (re-entrant guard for circular dependencies)
-    heap_.set_class_init_state(std::string(class_name),
-                               Heap::ClassInitState::Initializing);
+    cf->init_state = ClassFile::InitState::Initializing;
 
     // Find <clinit> method
     const method_info* clinit = nullptr;
@@ -1338,8 +1333,7 @@ void Interpreter::ensure_initialized(JavaThread& thread, std::string_view class_
     }
 
     // Mark as Initialized
-    heap_.set_class_init_state(std::string(class_name),
-                               Heap::ClassInitState::Initialized);
+    cf->init_state = ClassFile::InitState::Initialized;
 }
 
 void Interpreter::trigger_gc(JavaThread& thread) {
