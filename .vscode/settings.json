@@ -8,6 +8,13 @@
         "javap": true,
         "javac": true,
         "strings": true,
-        "timeout": true
+        "timeout": true,
+        "where": true,
+        "Get-Command": true,
+        "ForEach-Object": true,
+        "Test-Path": true,
+        "git clone": true,
+        "C:\\vcpkg\\bootstrap-vcpkg.bat": true,
+        "ctest": true
     }
 }

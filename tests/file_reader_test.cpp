@@ -78,11 +78,22 @@ TEST_F(FileReaderTest, ReadHome_RejectsAbsolutePath) {
 
 TEST_F(FileReaderTest, ReadHome_ValidRelativePath) {
     // Create a file in $HOME for testing
+#if defined(_WIN32)
+    char* home_buf = nullptr;
+    std::size_t home_len = 0;
+    _dupenv_s(&home_buf, &home_len, "USERPROFILE");
+    if (home_buf == nullptr) {
+        GTEST_SKIP() << "USERPROFILE not set";
+    }
+    auto home = std::filesystem::path(home_buf);
+    free(home_buf);
+#else
     auto home_env = std::getenv("HOME");  // NOLINT(concurrency-mt-unsafe)
     if (home_env == nullptr) {
         GTEST_SKIP() << "HOME not set";
     }
     auto home = std::filesystem::path(home_env);
+#endif
     auto test_subdir = home / ".aijvm_test_tmp";
     std::filesystem::create_directories(test_subdir);
     auto home_test_file = test_subdir / "test_home_read.bin";

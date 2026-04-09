@@ -26,8 +26,16 @@ FetchContent_MakeAvailable(spdlog)
 add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
 
 # --- libzip for JMOD/ZIP reading ---
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(LIBZIP REQUIRED IMPORTED_TARGET libzip)
+# Try CMake config mode first (works with vcpkg, homebrew, etc.)
+find_package(libzip CONFIG QUIET)
+if(libzip_FOUND)
+    set(LIBZIP_TARGET libzip::zip)
+else()
+    # Fallback to pkg-config on Unix-like systems
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(LIBZIP REQUIRED IMPORTED_TARGET libzip)
+    set(LIBZIP_TARGET PkgConfig::LIBZIP)
+endif()
 
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/include)
@@ -37,7 +45,7 @@ file(GLOB_RECURSE SOURCES "src/*.cpp")
 
 # Generate the executable
 add_executable(aijvm ${SOURCES})
-target_link_libraries(aijvm PRIVATE spdlog::spdlog PkgConfig::LIBZIP)
+target_link_libraries(aijvm PRIVATE spdlog::spdlog ${LIBZIP_TARGET})
 
 # Enable testing (GoogleTest is highly recommended for validating AI-generated code)
 enable_testing()

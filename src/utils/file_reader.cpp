@@ -6,6 +6,9 @@
 #if defined(_WIN32)
 #include <array>
 #include <cstdlib>
+#include <windows.h>
+#elif defined(__APPLE__)
+#include <mach-o/dyld.h>
 #endif
 
 namespace aijvm::utils {

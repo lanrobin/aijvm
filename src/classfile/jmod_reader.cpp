@@ -63,7 +63,7 @@ std::optional<JmodReader> JmodReader::open(const std::filesystem::path& jmod_pat
     zip_error_t zerr;
     zip_error_init(&zerr);
 
-    zip_source_t* src = zip_source_file_create(jmod_path.c_str(), static_cast<zip_uint64_t>(zip_offset), -1, &zerr);
+    zip_source_t* src = zip_source_file_create(jmod_path.string().c_str(), static_cast<zip_uint64_t>(zip_offset), -1, &zerr);
     if (!src) {
         AIJVM_LOG_ERROR("zip_source_file_create failed for {}: {}", jmod_path.string(), zip_error_strerror(&zerr));
         zip_error_fini(&zerr);

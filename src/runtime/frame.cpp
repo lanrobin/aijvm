@@ -272,7 +272,7 @@ std::uint16_t Frame::read_u2() {
     // Java class files use big-endian byte order (§4.1)
     auto hi = static_cast<std::uint16_t>(bytecode_[pc_++]) << 8;
     auto lo = static_cast<std::uint16_t>(bytecode_[pc_++]);
-    return hi | lo;
+    return static_cast<std::uint16_t>(hi | lo);
 }
 
 std::int16_t Frame::read_s2() {

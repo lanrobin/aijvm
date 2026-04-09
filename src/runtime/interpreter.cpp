@@ -1137,11 +1137,11 @@ void Interpreter::do_field_access(JavaThread& thread, Frame& frame,
         // §2.5.4: Check static field storage in the heap
         auto* stored = heap_.get_static_field(full_name);
         if (stored) {
-            if (auto* v = std::get_if<std::int32_t>(stored)) frame.push_int(*v);
-            else if (auto* v = std::get_if<std::int64_t>(stored)) frame.push_long(*v);
-            else if (auto* v = std::get_if<float>(stored)) frame.push_float(*v);
-            else if (auto* v = std::get_if<double>(stored)) frame.push_double(*v);
-            else if (auto* v = std::get_if<void*>(stored)) frame.push_ref(*v);
+            if (auto* vi = std::get_if<std::int32_t>(stored)) frame.push_int(*vi);
+            else if (auto* vl = std::get_if<std::int64_t>(stored)) frame.push_long(*vl);
+            else if (auto* vf = std::get_if<float>(stored)) frame.push_float(*vf);
+            else if (auto* vd = std::get_if<double>(stored)) frame.push_double(*vd);
+            else if (auto* vr = std::get_if<void*>(stored)) frame.push_ref(*vr);
         } else {
             // No stored value — push type-appropriate default
             if (field_desc[0] == 'I' || field_desc[0] == 'Z' || field_desc[0] == 'B' ||
@@ -1179,11 +1179,11 @@ void Interpreter::do_field_access(JavaThread& thread, Frame& frame,
             else frame.push_ref(nullptr);
         } else {
             auto& fv = it->second;
-            if (auto* v = std::get_if<std::int32_t>(&fv)) frame.push_int(*v);
-            else if (auto* v = std::get_if<std::int64_t>(&fv)) frame.push_long(*v);
-            else if (auto* v = std::get_if<float>(&fv)) frame.push_float(*v);
-            else if (auto* v = std::get_if<double>(&fv)) frame.push_double(*v);
-            else if (auto* v = std::get_if<void*>(&fv)) frame.push_ref(*v);
+            if (auto* vi = std::get_if<std::int32_t>(&fv)) frame.push_int(*vi);
+            else if (auto* vl = std::get_if<std::int64_t>(&fv)) frame.push_long(*vl);
+            else if (auto* vf = std::get_if<float>(&fv)) frame.push_float(*vf);
+            else if (auto* vd = std::get_if<double>(&fv)) frame.push_double(*vd);
+            else if (auto* vr = std::get_if<void*>(&fv)) frame.push_ref(*vr);
         }
         break;
     }

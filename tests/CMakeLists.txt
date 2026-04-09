@@ -4,7 +4,7 @@
 find_package(GTest REQUIRED)
 
 # Create the test executable
-add_executable(run_tests
+add_executable(aijvm_tests
     dummy_test.cpp
     command_line_parser_test.cpp
     jmod_reader_test.cpp
@@ -35,7 +35,7 @@ add_executable(run_tests
 )
 
 # Link GoogleTest, spdlog, libzip, and its main function
-target_link_libraries(run_tests GTest::gtest GTest::gtest_main spdlog::spdlog PkgConfig::LIBZIP)
+target_link_libraries(aijvm_tests GTest::gtest GTest::gtest_main spdlog::spdlog ${LIBZIP_TARGET})
 
 # Register the test with CTest so `make test` or `ctest` works
-add_test(NAME AIJVM_Tests COMMAND run_tests)
+add_test(NAME AIJVM_Tests COMMAND aijvm_tests)
