@@ -1,6 +1,8 @@
 #include "runtime/heap.h"
 #include "runtime/opcode.h"
+#include "utils/logger.h"
 
+#include <algorithm>
 #include <format>
 #include <stdexcept>
 
@@ -38,11 +40,144 @@ std::string_view NoOpGC::name() const noexcept {
 }
 
 // ============================================================================
+// SemiSpaceGC — Cheney's Algorithm
+// ============================================================================
+//
+// §2.5.3: "Heap storage for objects is reclaimed by an automatic storage
+// management system (known as a garbage collector); objects are never
+// explicitly deallocated."
+//
+// Algorithm:
+//   1. For each root reference, copy the referenced object to to-space
+//      (a new vector) and set a forwarding pointer on the from-space copy.
+//   2. BFS scan: iterate over to-space objects, for each reference field,
+//      copy the target if not yet forwarded, or update to the forwarded copy.
+//   3. After scanning, swap to-space into the heap's objects_ vector.
+//      Dead objects in from-space are released by unique_ptr destructors.
+//   4. Update all external references (static fields) via forwarding pointers.
+// ============================================================================
+
+/// Deep-copy a JObject to to-space. Returns the new copy.
+/// Sets forwarding_ptr on the original.
+static std::unique_ptr<JObject> copy_object(JObject* from) {
+    auto to = std::make_unique<JObject>();
+    to->class_name = from->class_name;
+    to->kind = from->kind;
+    to->forwarding_ptr = nullptr;
+    to->fields = from->fields;
+    to->array_int = from->array_int;
+    to->array_long = from->array_long;
+    to->array_float = from->array_float;
+    to->array_double = from->array_double;
+    to->array_byte = from->array_byte;
+    to->array_char = from->array_char;
+    to->array_short = from->array_short;
+    to->array_ref = from->array_ref;
+    // Note: monitor and monitor_cv are NOT copied — new object gets fresh ones.
+    // This is intentional: the old object is dead after GC.
+    auto* to_ptr = to.get();
+    from->forwarding_ptr = to_ptr;
+    return to;
+}
+
+/// If obj has been forwarded, return the forwarded address. Otherwise,
+/// copy it to to-space, set forwarding, and return the copy.
+static JObject* forward_or_copy(JObject* obj,
+                                std::vector<std::unique_ptr<JObject>>& to_space) {
+    if (!obj) return nullptr;
+    if (obj->forwarding_ptr) return obj->forwarding_ptr;
+    auto copy = copy_object(obj);
+    auto* result = copy.get();
+    to_space.push_back(std::move(copy));
+    return result;
+}
+
+/// Update a void* that might point to a JObject. If the target has been
+/// forwarded, update the pointer. Otherwise, copy it.
+static void update_ref(void*& ref_slot,
+                       std::vector<std::unique_ptr<JObject>>& to_space) {
+    if (!ref_slot) return;
+    auto* obj = static_cast<JObject*>(ref_slot);
+    ref_slot = forward_or_copy(obj, to_space);
+}
+
+void SemiSpaceGC::collect(std::vector<JObject*>& all_objects,
+                          const std::vector<JObject*>& roots) {
+    std::size_t before_count = all_objects.size();
+
+    // To-space: the new live object set
+    std::vector<std::unique_ptr<JObject>> to_space;
+    to_space.reserve(before_count / 2);  // heuristic
+
+    // Phase 1: Copy all root-reachable objects to to-space
+    // The roots vector contains JObject* from thread stacks and static fields.
+    // We don't own them here — the caller will update pointers via forwarding.
+    for (auto* root : roots) {
+        if (root) {
+            (void)forward_or_copy(root, to_space);
+        }
+    }
+
+    // Phase 2: BFS scan — Cheney's algorithm
+    // Scan position tracks how far we've processed in to-space.
+    std::size_t scan = 0;
+    while (scan < to_space.size()) {
+        auto* obj = to_space[scan].get();
+
+        // Scan instance fields
+        for (auto& [key, fv] : obj->fields) {
+            if (auto* ref = std::get_if<void*>(&fv)) {
+                update_ref(*ref, to_space);
+            }
+        }
+
+        // Scan reference array elements
+        if (obj->kind == ObjectKind::ArrayRef) {
+            for (auto& ref : obj->array_ref) {
+                update_ref(ref, to_space);
+            }
+        }
+
+        ++scan;
+    }
+
+    // Phase 3: Build the new all_objects pointer list (for the Heap to swap in).
+    // The actual swap of unique_ptrs is done by the Heap.
+    // We store the to_space temporarily on this GC instance; the Heap will
+    // call us back or we communicate via the all_objects parameter.
+    //
+    // Since collect() receives a reference to a raw pointer vector (not the
+    // unique_ptr vector), we need to signal the Heap to do the swap.
+    // We'll update the all_objects to contain the new pointers.
+    all_objects.clear();
+    all_objects.reserve(to_space.size());
+    for (auto& obj : to_space) {
+        all_objects.push_back(obj.get());
+    }
+
+    last_live_count = to_space.size();
+    last_freed_count = before_count >= to_space.size() ?
+                       before_count - to_space.size() : 0;
+
+    AIJVM_LOG_INFO("SemiSpaceGC: collected {} dead objects, {} live objects remain",
+                   last_freed_count, last_live_count);
+
+    // Stash to_space for the Heap to adopt (via swap in gc() method).
+    // We use a small trick: store in a thread-local or member.
+    // For simplicity: use a member that Heap::gc() reads after collect().
+    to_space_ = std::move(to_space);
+}
+
+std::string_view SemiSpaceGC::name() const noexcept {
+    return "SemiSpaceGC";
+}
+
+// ============================================================================
 // Heap
 // ============================================================================
 
-Heap::Heap(std::unique_ptr<GarbageCollector> gc)
-    : gc_(std::move(gc)) {}
+Heap::Heap(std::unique_ptr<GarbageCollector> gc, std::size_t max_size)
+    : gc_(std::move(gc)), max_heap_size_(max_size) {}
 
 Heap::~Heap() = default;
 Heap::Heap(Heap&&) noexcept = default;
@@ -132,6 +267,38 @@ void Heap::gc(const std::vector<JObject*>& roots) {
         raw_ptrs.push_back(o.get());
     }
     gc_->collect(raw_ptrs, roots);
+
+    // If the GC is SemiSpaceGC, adopt the new to-space and update static fields
+    if (auto* ssgc = dynamic_cast<SemiSpaceGC*>(gc_.get())) {
+        // Swap objects_ with the to-space (old objects_ will be dropped)
+        objects_ = std::move(ssgc->to_space_);
+
+        // Update static field references via forwarding pointers
+        for (auto& [key, fv] : static_fields_) {
+            if (auto* ref = std::get_if<void*>(&fv)) {
+                if (*ref) {
+                    auto* obj = static_cast<JObject*>(*ref);
+                    if (obj->forwarding_ptr) {
+                        *ref = obj->forwarding_ptr;
+                    }
+                }
+            }
+        }
+    }
+}
+
+bool Heap::should_gc() const noexcept {
+    if (max_heap_size_ == 0) return false;
+    return estimated_memory_usage() > max_heap_size_ / 2;
+}
+
+std::size_t Heap::estimated_memory_usage() const noexcept {
+    // Rough estimate: 256 bytes per object (class name, fields, arrays average)
+    return objects_.size() * 256;
+}
+
+std::size_t Heap::max_heap_size() const noexcept {
+    return max_heap_size_;
 }
 
 std::size_t Heap::object_count() const noexcept {

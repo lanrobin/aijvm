@@ -23,6 +23,7 @@ add_executable(run_tests
     ${CMAKE_SOURCE_DIR}/src/runtime/interpreter.cpp
     ${CMAKE_SOURCE_DIR}/src/runtime/heap.cpp
     ${CMAKE_SOURCE_DIR}/src/runtime/native_registry.cpp
+    ${CMAKE_SOURCE_DIR}/src/runtime/safepoint.cpp
     ${CMAKE_SOURCE_DIR}/src/natives/java_lang_Object.cpp
     ${CMAKE_SOURCE_DIR}/src/natives/java_lang_Class.cpp
     ${CMAKE_SOURCE_DIR}/src/natives/java_lang_System.cpp

@@ -26,7 +26,8 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        aijvm::JVMEngine engine(opts->boot_jmod_path, opts->class_path);
+        aijvm::JVMEngine engine(opts->boot_jmod_path, opts->class_path,
+                                opts->max_heap_size);
         engine.run(opts->main_class, opts->program_args);
     } catch (const aijvm::JVMError& e) {
         AIJVM_LOG_ERROR("JVM Error: {}", e.what());

@@ -4,6 +4,7 @@
 #include "runtime/heap.h"
 #include "runtime/interpreter.h"
 #include "runtime/native_registry.h"
+#include "runtime/safepoint.h"
 #include "runtime/java_thread.h"
 
 #include <filesystem>
@@ -39,8 +40,10 @@ class JVMError : public std::runtime_error {
 class JVMEngine {
 public:
     /// Construct the engine with bootstrap and application class paths.
+    /// @param max_heap_size  Maximum heap size in bytes (from -Xmx). 0 = unlimited.
     JVMEngine(const std::filesystem::path& boot_jmod_path,
-              const std::filesystem::path& class_path);
+              const std::filesystem::path& class_path,
+              std::size_t max_heap_size = 0);
 
     /// Load and execute the main method of the given class.
     /// @param main_class  Canonical class name (e.g. "HelloAdd")
@@ -52,6 +55,7 @@ private:
     classloader::ClassLoader class_loader_;
     runtime::Heap heap_;
     runtime::NativeMethodRegistry native_registry_;
+    runtime::SafepointManager safepoint_mgr_;
     runtime::Interpreter interpreter_;
 };
 

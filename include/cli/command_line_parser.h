@@ -18,6 +18,9 @@ struct CommandLineOptions {
 
     std::vector<std::string> program_args;  // remaining args forwarded to main(String[])
 
+    /// Maximum heap size in bytes. Parsed from -Xmx (e.g., -Xmx64M). Default 64 MiB.
+    std::size_t max_heap_size = 64 * 1024 * 1024;
+
     /// Unrecognized --key value pairs preserved for future use.
     std::map<std::string, std::string> extra_options;
 };

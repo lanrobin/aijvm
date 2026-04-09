@@ -19,9 +19,14 @@ using namespace classfile;
 using namespace runtime;
 
 JVMEngine::JVMEngine(const std::filesystem::path& boot_jmod_path,
-                     const std::filesystem::path& class_path)
+                     const std::filesystem::path& class_path,
+                     std::size_t max_heap_size)
     : class_loader_(boot_jmod_path, class_path),
-      interpreter_(heap_, class_loader_, native_registry_) {
+      heap_([&]() -> std::unique_ptr<GarbageCollector> {
+                if (max_heap_size > 0) return std::make_unique<SemiSpaceGC>();
+                return std::make_unique<NoOpGC>();
+            }(), max_heap_size),
+      interpreter_(heap_, class_loader_, native_registry_, safepoint_mgr_) {
     // Register all built-in native methods
     natives::register_java_lang_Object(native_registry_);
     natives::register_java_lang_Class(native_registry_);

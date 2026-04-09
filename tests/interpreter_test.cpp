@@ -8,6 +8,7 @@
 #include "classfile/class_file.h"
 #include "classloader/class_loader.h"
 #include "runtime/native_registry.h"
+#include "runtime/safepoint.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -59,8 +60,9 @@ protected:
     // ClassLoader with non-existent paths — fine for synthetic bytecode tests
     aijvm::classloader::ClassLoader loader_{"/nonexistent", "/nonexistent"};
     NativeMethodRegistry native_registry_;
+    SafepointManager safepoint_mgr_;
 
-    Interpreter make_interp() { return Interpreter(heap_, loader_, native_registry_); }
+    Interpreter make_interp() { return Interpreter(heap_, loader_, native_registry_, safepoint_mgr_); }
 };
 
 // ============================================================================

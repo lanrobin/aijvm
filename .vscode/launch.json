@@ -6,7 +6,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/aijvm",
-            "args": ["--bj", "/usr/lib/jvm/java-25-openjdk-amd64/jmods", "--cp", "${workspaceFolder}/tests/javaclasses", "ProduceConsumer"],
+            "args": ["--bj", "/usr/lib/jvm/java-25-openjdk-amd64/jmods", "--cp", "${workspaceFolder}/tests/javaclasses", "-Xmx64M", "GCTest"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

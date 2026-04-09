@@ -3,6 +3,7 @@
 #include "runtime/opcode.h"
 #include "runtime/heap.h"
 #include "runtime/native_registry.h"
+#include "runtime/safepoint.h"
 #include "runtime/java_thread.h"
 
 #include <cstdint>
@@ -49,7 +50,8 @@ public:
     /// @param class_loader    For on-demand class loading during resolution (§5.3)
     /// @param native_registry Registry of native method bindings
     Interpreter(Heap& heap, classloader::ClassLoader& class_loader,
-                NativeMethodRegistry& native_registry);
+                NativeMethodRegistry& native_registry,
+                SafepointManager& safepoint_mgr);
 
     /// Execute the current frame on the given thread until the method returns.
     /// For `return` (void): pops the frame and returns to caller.
@@ -66,6 +68,7 @@ private:
     Heap& heap_;
     classloader::ClassLoader& class_loader_;
     NativeMethodRegistry& native_registry_;
+    SafepointManager& safepoint_mgr_;
 
     // --- Instruction group handlers (reduce switch-case bloat) ---
 
@@ -109,6 +112,10 @@ private:
     ///  3. Finds <clinit> in the ClassFile and executes it synchronously
     ///  4. Transitions class state: Uninitialized → Initializing → Initialized
     void ensure_initialized(JavaThread& thread, std::string_view class_name);
+
+    /// Trigger a GC cycle, scanning the given thread for GC roots.
+    /// Called when heap.should_gc() returns true at allocation sites.
+    void trigger_gc(JavaThread& thread);
 };
 
 } // namespace aijvm::runtime

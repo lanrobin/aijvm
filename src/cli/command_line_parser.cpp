@@ -32,8 +32,34 @@ void print_usage(std::string_view program_name) {
     while (i < args.size()) {
         std::string_view arg = args[i];
 
-        // Not an option flag — treat as main class (first positional).
+        // Not an option flag — check for -X style options or treat as main class.
         if (!arg.starts_with("--")) {
+            // Parse -Xmx<size> (e.g., -Xmx64M, -Xmx256m, -Xmx1G)
+            if (arg.starts_with("-Xmx")) {
+                auto size_str = arg.substr(4);
+                std::size_t multiplier = 1;
+                if (size_str.ends_with("K") || size_str.ends_with("k")) {
+                    multiplier = 1024;
+                    size_str = size_str.substr(0, size_str.size() - 1);
+                } else if (size_str.ends_with("M") || size_str.ends_with("m")) {
+                    multiplier = 1024 * 1024;
+                    size_str = size_str.substr(0, size_str.size() - 1);
+                } else if (size_str.ends_with("G") || size_str.ends_with("g")) {
+                    multiplier = 1024ULL * 1024 * 1024;
+                    size_str = size_str.substr(0, size_str.size() - 1);
+                }
+                std::size_t val = 0;
+                for (char c : size_str) {
+                    if (c < '0' || c > '9') {
+                        AIJVM_LOG_ERROR("Invalid -Xmx value: {}", arg);
+                        return std::nullopt;
+                    }
+                    val = val * 10 + static_cast<std::size_t>(c - '0');
+                }
+                opts.max_heap_size = val * multiplier;
+                ++i;
+                continue;
+            }
             break;
         }
 
