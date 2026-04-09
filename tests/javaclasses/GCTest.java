@@ -19,18 +19,18 @@ public class GCTest {
 
         // 1. Create a strong reference (GC Root).
         // This 'head' exists in the Local Variable Array of the main method's Frame.
-        Node head = new Node(0, 1024); // 1KB
+        Node head = new Node(0, 10240); // 10KB
         Node current = head;
 
         System.out.println("Phase 1: Allocating objects to trigger natural GC...");
         
         // 2. Loop object allocation to intentionally fill memory.
         // Assuming -Xmx10M (From-Space is 5M), this loop is enough to trigger natural GC multiple times.
-        for (int i = 1; i <= 20000; i++) {
+        for (int i = 1; i <= 400000; i++) {
             
             if (i % 1000 == 0) {
                 // Keep one object alive every 1000 iterations by appending it to the linked list.
-                current.next = new Node(i, 1024);
+                current.next = new Node(i, 10240); // 10KB
                 current = current.next;
                 System.out.println("Kept alive node id: " + i);
             } else {
@@ -65,11 +65,11 @@ public class GCTest {
         
         System.out.println("Total survived nodes in linked list: " + count);
         
-        // Expected output: 1 (head) + (20000 / 1000) = 21 nodes.
-        if (count == 21) {
+        // Expected output: 1 (head) + (40000 / 1000) = 41 nodes.
+        if (count == 41) {
             System.out.println("GC Test Finished Successfully! Cheney Algorithm is solid.");
         } else {
-            System.out.println("GC Test FAILED. Expected 21 nodes, found: " + count);
+            System.out.println("GC Test FAILED. Expected 41 nodes, found: " + count);
         }
     }
 }

@@ -108,4 +108,20 @@ void JavaThread::set_alive(bool alive) noexcept {
     state_ = alive ? ThreadState::Runnable : ThreadState::Terminated;
 }
 
+void JavaThread::collect_gc_roots(std::vector<void*>& roots) const {
+    for (const auto& frame : stack_) {
+        if (frame) {
+            frame->collect_gc_roots(roots);
+        }
+    }
+}
+
+void JavaThread::update_gc_references() {
+    for (auto& frame : stack_) {
+        if (frame) {
+            frame->update_gc_references();
+        }
+    }
+}
+
 } // namespace aijvm::runtime

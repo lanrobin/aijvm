@@ -95,6 +95,14 @@ public:
     /// Check if the JVM stack is empty.
     [[nodiscard]] bool stack_empty() const noexcept;
 
+    // ===== GC Support =====
+
+    /// Collect all GC roots from all frames in this thread's stack.
+    void collect_gc_roots(std::vector<void*>& roots) const;
+
+    /// Update all references in all frames after GC forwarding.
+    void update_gc_references();
+
     // ===== Thread Metadata =====
 
     [[nodiscard]] const std::string& name() const noexcept;

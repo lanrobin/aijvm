@@ -1342,24 +1342,26 @@ void Interpreter::ensure_initialized(JavaThread& thread, std::string_view class_
                                Heap::ClassInitState::Initialized);
 }
 
-void Interpreter::trigger_gc([[maybe_unused]] JavaThread& thread) {
+void Interpreter::trigger_gc(JavaThread& thread) {
     // Collect GC roots from:
     //   1. All reference slots in the thread's frame stack (locals + operand stack)
-    //   2. Static fields in the heap
+    //   2. Static fields are handled by Heap::gc() internally
+
+    std::vector<void*> raw_roots;
+    thread.collect_gc_roots(raw_roots);
+
+    // Convert to JObject* for the GC interface
     std::vector<JObject*> roots;
+    roots.reserve(raw_roots.size());
+    for (auto* ptr : raw_roots) {
+        roots.push_back(static_cast<JObject*>(ptr));
+    }
 
-    // Scan thread frames — we can only scan the current thread's frames
-    // since other threads are at safepoints and their stacks are frozen.
-    // In a full implementation we'd scan all registered threads.
-    // For now, scan the current thread only (single-thread GC trigger).
-
-    // Note: We don't have direct access to Frame internals for slot iteration
-    // from here. The GC root scanning is simplified: we rely on static fields
-    // and the forwarding pointer mechanism to handle reachability.
-
-    // Static field roots are handled internally by Heap::gc().
-    // Pass an empty root set — the static field update happens in Heap::gc().
+    // Run GC
     heap_.gc(roots);
+
+    // After GC, update all thread stack references via forwarding pointers
+    thread.update_gc_references();
 }
 
 } // namespace aijvm::runtime

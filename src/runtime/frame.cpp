@@ -1,4 +1,5 @@
 #include "runtime/frame.h"
+#include "runtime/heap.h"
 
 #include <bit>
 #include <format>
@@ -302,6 +303,55 @@ const classfile::method_info& Frame::get_method() const noexcept {
 
 std::span<const std::uint8_t> Frame::get_bytecode() const noexcept {
     return bytecode_;
+}
+
+void Frame::collect_gc_roots(std::vector<void*>& roots) const {
+    // Scan local variables for Reference slots
+    for (const auto& slot : locals_) {
+        if (slot.type == SlotType::Reference && slot.value.ref != nullptr) {
+            roots.push_back(slot.value.ref);
+        }
+    }
+    // Scan operand stack (only active portion up to stack_top_)
+    for (std::size_t i = 0; i < stack_top_; ++i) {
+        if (operand_stack_[i].type == SlotType::Reference &&
+            operand_stack_[i].value.ref != nullptr) {
+            roots.push_back(operand_stack_[i].value.ref);
+        }
+    }
+    // sync_object_ is also a root
+    if (sync_object_) {
+        roots.push_back(sync_object_);
+    }
+}
+
+void Frame::update_gc_references() {
+    // Update local variable references via forwarding pointers
+    for (auto& slot : locals_) {
+        if (slot.type == SlotType::Reference && slot.value.ref != nullptr) {
+            auto* obj = static_cast<JObject*>(slot.value.ref);
+            if (obj->forwarding_ptr) {
+                slot.value.ref = obj->forwarding_ptr;
+            }
+        }
+    }
+    // Update operand stack references
+    for (std::size_t i = 0; i < stack_top_; ++i) {
+        if (operand_stack_[i].type == SlotType::Reference &&
+            operand_stack_[i].value.ref != nullptr) {
+            auto* obj = static_cast<JObject*>(operand_stack_[i].value.ref);
+            if (obj->forwarding_ptr) {
+                operand_stack_[i].value.ref = obj->forwarding_ptr;
+            }
+        }
+    }
+    // Update sync_object_
+    if (sync_object_) {
+        auto* obj = static_cast<JObject*>(sync_object_);
+        if (obj->forwarding_ptr) {
+            sync_object_ = obj->forwarding_ptr;
+        }
+    }
 }
 
 } // namespace aijvm::runtime

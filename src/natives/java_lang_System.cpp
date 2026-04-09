@@ -1,5 +1,6 @@
 #include "natives/java_lang_System.h"
 #include "runtime/heap.h"
+#include "runtime/interpreter.h"
 
 namespace aijvm::natives {
 
@@ -43,6 +44,13 @@ void register_java_lang_System(NativeMethodRegistry& registry) {
                         src->array_ref[static_cast<std::size_t>(src_pos + i)];
                 }
             }
+        });
+
+    // System.gc:()V — trigger garbage collection
+    registry.register_method(
+        NativeMethodRegistry::make_key("java/lang/System", "gc", "()V"),
+        []([[maybe_unused]] VMContext& ctx) {
+            ctx.interpreter.trigger_gc(ctx.thread);
         });
 }
 

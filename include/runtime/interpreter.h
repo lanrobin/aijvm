@@ -64,6 +64,10 @@ public:
     /// Returns false when the method has returned (frame was popped).
     [[nodiscard]] bool execute_instruction(JavaThread& thread, Frame& frame);
 
+    /// Trigger a GC cycle, scanning the given thread for GC roots.
+    /// Called from System.gc() native or when heap.should_gc() returns true.
+    void trigger_gc(JavaThread& thread);
+
 private:
     Heap& heap_;
     classloader::ClassLoader& class_loader_;
@@ -112,10 +116,6 @@ private:
     ///  3. Finds <clinit> in the ClassFile and executes it synchronously
     ///  4. Transitions class state: Uninitialized → Initializing → Initialized
     void ensure_initialized(JavaThread& thread, std::string_view class_name);
-
-    /// Trigger a GC cycle, scanning the given thread for GC roots.
-    /// Called when heap.should_gc() returns true at allocation sites.
-    void trigger_gc(JavaThread& thread);
 };
 
 } // namespace aijvm::runtime

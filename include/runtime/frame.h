@@ -114,6 +114,16 @@ public:
     [[nodiscard]] const classfile::method_info& get_method() const noexcept;
     [[nodiscard]] std::span<const std::uint8_t> get_bytecode() const noexcept;
 
+    // ===== GC Root Scanning =====
+
+    /// Collect all reference-type slots (locals + operand stack) as GC roots.
+    /// Appends non-null reference pointers to the given vector.
+    void collect_gc_roots(std::vector<void*>& roots) const;
+
+    /// Update all reference-type slots after GC forwarding.
+    /// If a reference's target has a non-null forwarding_ptr, update the slot.
+    void update_gc_references();
+
 private:
     std::shared_ptr<classfile::ClassFile> class_file_;
     const classfile::method_info* method_;
