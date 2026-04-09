@@ -8,35 +8,31 @@
 #include <string_view>
 #include <unordered_map>
 
+namespace aijvm::classloader {
+    class ClassLoader;
+}
+
 namespace aijvm::runtime {
+
+class Interpreter;  // forward declaration
 
 // ============================================================================
 // Native Method Registry
 // ============================================================================
-//
-// §2.5.6 Native Method Stacks / §6.5 invokenative semantics:
-// "A Java Virtual Machine implementation may use conventional stacks,
-// colloquially called 'C stacks,' to support native methods."
-//
-// Design: A lookup table mapping "class_name.method_name:descriptor" to a
-// C++ std::function handler. The Interpreter queries this registry when it
-// encounters a method with ACC_NATIVE set. If no binding exists, it throws
-// NativeMethodNotFoundError.
-//
-// Each native handler receives:
-//   - The executing thread (for frame/stack access)
-//   - The current frame (to pop arguments and push return values)
-//   - A reference to the heap (for object allocation)
-//
-// The handler is responsible for popping its arguments from the caller's
-// operand stack and pushing any return value.
-// ============================================================================
+
+/// Bundles all VM subsystem references needed by native method handlers.
+/// Passed by reference to every native method invocation.
+struct VMContext {
+    JavaThread& thread;
+    Frame& frame;
+    Heap& heap;
+    Interpreter& interpreter;
+    classloader::ClassLoader& class_loader;
+};
 
 /// Signature for native method implementations.
-/// @param thread  The executing thread
-/// @param frame   Caller's frame (args are already on the operand stack)
-/// @param heap    Shared heap for object allocation
-using NativeMethodFn = std::function<void(JavaThread& thread, Frame& frame, Heap& heap)>;
+/// @param ctx  VM context with all subsystem references
+using NativeMethodFn = std::function<void(VMContext& ctx)>;
 
 /// Centralized registry for all native method bindings.
 class NativeMethodRegistry {

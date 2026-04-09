@@ -165,6 +165,9 @@ void Heap::init_system_classes() {
     set_class_init_state("java/lang/Class", ClassInitState::Initialized);
     set_class_init_state("java/lang/StringBuilder", ClassInitState::Initialized);
     set_class_init_state("java/lang/AbstractStringBuilder", ClassInitState::Initialized);
+    set_class_init_state("java/lang/Thread", ClassInitState::Initialized);
+    set_class_init_state("java/lang/ThreadGroup", ClassInitState::Initialized);
+    set_class_init_state("java/lang/Runnable", ClassInitState::Initialized);
 }
 
 Heap::ClassInitState Heap::get_class_init_state(const std::string& class_name) const {

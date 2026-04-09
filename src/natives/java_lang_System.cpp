@@ -9,33 +9,27 @@ void register_java_lang_System(NativeMethodRegistry& registry) {
     // System.registerNatives:()V — JVM internal, no-op
     registry.register_method(
         NativeMethodRegistry::make_key("java/lang/System", "registerNatives", "()V"),
-        []([[maybe_unused]] JavaThread& thread,
-           [[maybe_unused]] Frame& frame,
-           [[maybe_unused]] Heap& heap) {
+        []([[maybe_unused]] VMContext& ctx) {
             // No-op
         });
 
     // System.currentTimeMillis:()J
     registry.register_method(
         NativeMethodRegistry::make_key("java/lang/System", "currentTimeMillis", "()J"),
-        []([[maybe_unused]] JavaThread& thread,
-           Frame& frame,
-           [[maybe_unused]] Heap& heap) {
-            frame.push_long(0LL);  // simplified
+        []([[maybe_unused]] VMContext& ctx) {
+            ctx.frame.push_long(0LL);  // simplified
         });
 
     // System.arraycopy:(Ljava/lang/Object;ILjava/lang/Object;II)V
     registry.register_method(
         NativeMethodRegistry::make_key("java/lang/System", "arraycopy",
             "(Ljava/lang/Object;ILjava/lang/Object;II)V"),
-        []([[maybe_unused]] JavaThread& thread,
-           Frame& frame,
-           [[maybe_unused]] Heap& heap) {
-            auto length = frame.pop_int();
-            auto dest_pos = frame.pop_int();
-            auto* dest = static_cast<JObject*>(frame.pop_ref());
-            auto src_pos = frame.pop_int();
-            auto* src = static_cast<JObject*>(frame.pop_ref());
+        []([[maybe_unused]] VMContext& ctx) {
+            auto length = ctx.frame.pop_int();
+            auto dest_pos = ctx.frame.pop_int();
+            auto* dest = static_cast<JObject*>(ctx.frame.pop_ref());
+            auto src_pos = ctx.frame.pop_int();
+            auto* src = static_cast<JObject*>(ctx.frame.pop_ref());
             if (!src || !dest) return;
             // Simple int array copy
             if (src->kind == ObjectKind::ArrayInt && dest->kind == ObjectKind::ArrayInt) {

@@ -355,7 +355,7 @@ TEST(FramePCTest, ReadPastEnd) {
 TEST(JavaThreadTest, DefaultConstruction) {
     JavaThread thread;
     EXPECT_EQ(thread.name(), "main");
-    EXPECT_TRUE(thread.is_alive());
+    EXPECT_EQ(thread.state(), ThreadState::New);
     EXPECT_TRUE(thread.stack_empty());
     EXPECT_EQ(thread.frame_count(), 0u);
     EXPECT_EQ(thread.current_frame(), nullptr);
@@ -412,7 +412,68 @@ TEST(JavaThreadTest, PopEmptyStack) {
 
 TEST(JavaThreadTest, AliveFlag) {
     JavaThread thread;
+    EXPECT_EQ(thread.state(), ThreadState::New);
+    EXPECT_FALSE(thread.is_alive());  // New state, not yet started
+    thread.set_alive(true);
     EXPECT_TRUE(thread.is_alive());
     thread.set_alive(false);
     EXPECT_FALSE(thread.is_alive());
+}
+
+// ============================================================================
+// §2.5.1 — JavaThread OS Thread Tests
+// ============================================================================
+
+TEST(JavaThreadTest, StartAndJoin) {
+    JavaThread thread("worker");
+    EXPECT_EQ(thread.state(), ThreadState::New);
+
+    bool executed = false;
+    thread.start([&executed]([[maybe_unused]] JavaThread& t) {
+        executed = true;
+    });
+
+    thread.join();
+    EXPECT_TRUE(executed);
+    EXPECT_EQ(thread.state(), ThreadState::Terminated);
+}
+
+TEST(JavaThreadTest, StartWithBytecodeExecution) {
+    // Run a simple bytecode program on a child OS thread
+    static const std::vector<std::uint8_t> code = {
+        0x08,  // iconst_5
+        0x3C,  // istore_1
+        0xB1   // return
+    };
+
+    JavaThread thread("bytecode-worker");
+    auto frame = std::make_unique<Frame>(
+        nullptr, nullptr, 2, 1,
+        std::span<const std::uint8_t>(code));
+    thread.push_frame(std::move(frame));
+
+    bool completed = false;
+    thread.start([&completed](JavaThread& t) {
+        // Manual single-step execution
+        auto* f = t.current_frame();
+        ASSERT_NE(f, nullptr);
+        // iconst_5
+        auto op1 = f->read_u1();
+        EXPECT_EQ(op1, 0x08);
+        f->push_int(5);
+        // istore_1
+        auto op2 = f->read_u1();
+        EXPECT_EQ(op2, 0x3C);
+        f->set_local_int(1, f->pop_int());
+        EXPECT_EQ(f->get_local_int(1), 5);
+        // return
+        auto op3 = f->read_u1();
+        EXPECT_EQ(op3, 0xB1);
+        (void)t.pop_frame();
+        completed = true;
+    });
+
+    thread.join();
+    EXPECT_TRUE(completed);
+    EXPECT_TRUE(thread.stack_empty());
 }

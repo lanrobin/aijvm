@@ -1,7 +1,9 @@
 #pragma once
 
+#include <condition_variable>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <variant>
@@ -80,6 +82,12 @@ struct JObject {
 
     /// Get array length regardless of element type
     [[nodiscard]] std::int32_t array_length() const noexcept;
+
+    // ----- Monitor (§8.13 / §17.1) -----
+    /// Per-object recursive mutex for synchronized methods and monitorenter/monitorexit.
+    std::recursive_mutex monitor;
+    /// Condition variable for wait()/notify()/notifyAll()
+    std::condition_variable_any monitor_cv;
 };
 
 // ============================================================================

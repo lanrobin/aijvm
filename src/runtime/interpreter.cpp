@@ -701,39 +701,53 @@ bool Interpreter::execute_instruction(JavaThread& thread, Frame& frame) {
     }
 
     // --- Returns ---
+    // Helper: release synchronized monitor if set
+    #define RELEASE_MONITOR_IF_SYNC() \
+        do { if (frame.sync_object_) { \
+            static_cast<JObject*>(frame.sync_object_)->monitor.unlock(); \
+        } } while(0)
+
     case Opcode::IRETURN: {
         auto val = frame.pop_int();
+        RELEASE_MONITOR_IF_SYNC();
         thread.pop_frame();
         if (auto* caller = thread.current_frame()) caller->push_int(val);
         return false;
     }
     case Opcode::LRETURN: {
         auto val = frame.pop_long();
+        RELEASE_MONITOR_IF_SYNC();
         thread.pop_frame();
         if (auto* caller = thread.current_frame()) caller->push_long(val);
         return false;
     }
     case Opcode::FRETURN: {
         auto val = frame.pop_float();
+        RELEASE_MONITOR_IF_SYNC();
         thread.pop_frame();
         if (auto* caller = thread.current_frame()) caller->push_float(val);
         return false;
     }
     case Opcode::DRETURN: {
         auto val = frame.pop_double();
+        RELEASE_MONITOR_IF_SYNC();
         thread.pop_frame();
         if (auto* caller = thread.current_frame()) caller->push_double(val);
         return false;
     }
     case Opcode::ARETURN: {
         auto* val = frame.pop_ref();
+        RELEASE_MONITOR_IF_SYNC();
         thread.pop_frame();
         if (auto* caller = thread.current_frame()) caller->push_ref(val);
         return false;
     }
     case Opcode::RETURN:
+        RELEASE_MONITOR_IF_SYNC();
         thread.pop_frame();
         return false;
+
+    #undef RELEASE_MONITOR_IF_SYNC
 
     // ========================================================================
     // §6.5 — References (field access, method invocation, object creation)
@@ -812,13 +826,17 @@ bool Interpreter::execute_instruction(JavaThread& thread, Frame& frame) {
         break;
     }
 
-    case Opcode::MONITORENTER:
-        (void)frame.pop_ref();  // consume objectref, no-op (single-threaded for now)
+    case Opcode::MONITORENTER: {
+        auto* obj = static_cast<JObject*>(frame.pop_ref());
+        if (obj) obj->monitor.lock();
         break;
+    }
 
-    case Opcode::MONITOREXIT:
-        (void)frame.pop_ref();  // consume objectref, no-op
+    case Opcode::MONITOREXIT: {
+        auto* obj = static_cast<JObject*>(frame.pop_ref());
+        if (obj) obj->monitor.unlock();
         break;
+    }
 
     // ========================================================================
     // §6.5 — Extended
@@ -943,7 +961,8 @@ void Interpreter::do_invoke(JavaThread& thread, Frame& frame,
     auto native_key = NativeMethodRegistry::make_key(class_name, method_name, method_desc);
     auto* native_fn = native_registry_.find(native_key);
     if (native_fn) {
-        (*native_fn)(thread, frame, heap_);
+        VMContext ctx{thread, frame, heap_, *this, class_loader_};
+        (*native_fn)(ctx);
         return;
     }
 
@@ -1037,8 +1056,6 @@ void Interpreter::do_invoke(JavaThread& thread, Frame& frame,
     // Set locals from args
     std::uint16_t local_idx = 0;
     for (std::size_t i = 0; i < num_args && local_idx < code_attr->max_locals; ++i) {
-        new_frame->push_slot(Slot{});  // temporary use
-        // Actually set locals directly
         switch (args[i].type) {
         case SlotType::Int:
             new_frame->set_local_int(local_idx, args[i].value.i);
@@ -1062,10 +1079,25 @@ void Interpreter::do_invoke(JavaThread& thread, Frame& frame,
         }
         ++local_idx;
     }
-    // Clear the temp stack usage
-    while (!new_frame->stack_empty()) new_frame->pop_slot();
 
     thread.push_frame(std::move(new_frame));
+
+    // §8.4.3.6: ACC_SYNCHRONIZED — acquire monitor on method entry
+    if (target_method->access_flags & MethodAccess::ACC_SYNCHRONIZED) {
+        void* monitor_obj = nullptr;
+        if (target_method->access_flags & MethodAccess::ACC_STATIC) {
+            // Static synchronized: lock the class object (simplified: use nullptr)
+        } else {
+            // Instance synchronized: lock 'this' (args[0])
+            if (!args.empty() && args[0].type == SlotType::Reference) {
+                monitor_obj = args[0].value.ref;
+            }
+        }
+        if (monitor_obj) {
+            static_cast<JObject*>(monitor_obj)->monitor.lock();
+            thread.current_frame()->sync_object_ = monitor_obj;
+        }
+    }
 }
 
 void Interpreter::do_field_access(JavaThread& thread, Frame& frame,

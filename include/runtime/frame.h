@@ -125,6 +125,11 @@ private:
     std::uint16_t max_stack_;                 ///< Maximum operand stack depth
     std::span<const std::uint8_t> bytecode_;  ///< Method bytecode
     std::uint32_t pc_ = 0;                    ///< Program counter (bytecode offset)
+
+public:
+    /// Object whose monitor was acquired for ACC_SYNCHRONIZED methods.
+    /// nullptr for non-synchronized methods. Set by the interpreter.
+    void* sync_object_ = nullptr;
 };
 
 } // namespace aijvm::runtime

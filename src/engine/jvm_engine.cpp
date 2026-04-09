@@ -3,6 +3,7 @@
 #include "natives/java_lang_Object.h"
 #include "natives/java_lang_Class.h"
 #include "natives/java_lang_System.h"
+#include "natives/java_lang_Thread.h"
 #include "natives/java_lang_StringBuilder.h"
 #include "natives/java_io_PrintStream.h"
 #include "runtime/frame.h"
@@ -25,6 +26,7 @@ JVMEngine::JVMEngine(const std::filesystem::path& boot_jmod_path,
     natives::register_java_lang_Object(native_registry_);
     natives::register_java_lang_Class(native_registry_);
     natives::register_java_lang_System(native_registry_);
+    natives::register_java_lang_Thread(native_registry_);
     natives::register_java_lang_StringBuilder(native_registry_);
     natives::register_java_io_PrintStream(native_registry_);
 
@@ -84,15 +86,22 @@ void JVMEngine::run(const std::string& main_class,
         code_attr->max_locals, code_attr->max_stack,
         std::span<const std::uint8_t>(code_attr->code));
 
-    // §2.6.1: local[0] = args (String[] reference — null for now, no heap yet)
+    // §2.6.1: local[0] = args (String[] reference — null for now)
     frame->set_local_ref(0, nullptr);
 
-    // §2.5.2: Create the main thread and push the frame
-    JavaThread main_thread("main");
-    main_thread.push_frame(std::move(frame));
+    // §2.5.1/§2.5.2: Create the Java main thread and spawn it on a child OS thread.
+    // The OS main thread bootstraps the VM; the child thread executes Java bytecode.
+    auto main_thread = std::make_unique<JavaThread>("main");
+    main_thread->push_frame(std::move(frame));
 
-    // §2.12: Execute the interpreter dispatch loop
-    interpreter_.execute(main_thread);
+    // Capture interpreter reference for the thread entry function
+    auto& interp = interpreter_;
+    main_thread->start([&interp](JavaThread& thread) {
+        interp.execute(thread);
+    });
+
+    // OS main thread blocks until the Java main thread completes
+    main_thread->join();
 
     AIJVM_LOG_INFO("{}.main() returned", main_class);
 }

@@ -26,6 +26,7 @@ add_executable(run_tests
     ${CMAKE_SOURCE_DIR}/src/natives/java_lang_Object.cpp
     ${CMAKE_SOURCE_DIR}/src/natives/java_lang_Class.cpp
     ${CMAKE_SOURCE_DIR}/src/natives/java_lang_System.cpp
+    ${CMAKE_SOURCE_DIR}/src/natives/java_lang_Thread.cpp
     ${CMAKE_SOURCE_DIR}/src/natives/java_lang_StringBuilder.cpp
     ${CMAKE_SOURCE_DIR}/src/natives/java_io_PrintStream.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/file_reader.cpp

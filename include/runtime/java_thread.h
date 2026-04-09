@@ -3,8 +3,10 @@
 #include "runtime/frame.h"
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace aijvm::runtime {
@@ -30,23 +32,50 @@ class StackOverflowError : public std::runtime_error {
 // created at the same time as the thread. A Java Virtual Machine stack stores
 // frames (§2.6)." (§2.5.2)
 //
-// In this implementation, the PC is stored per-Frame (as bytecode offset) since
-// the interpreter dispatches from the current frame's code. The thread-level PC
-// is implicitly `current_frame()->pc()`.
+// Threading model: 1:1 mapping of Java threads to OS threads (§2.5.1).
+// Each JavaThread optionally owns a std::thread. The OS main thread
+// bootstraps the VM and spawns a child OS thread for the Java main thread.
 // ============================================================================
+
+/// Thread lifecycle states per JVM Specification.
+enum class ThreadState : std::uint8_t {
+    New,         ///< Thread created but not yet started
+    Runnable,    ///< Thread is executing or ready to execute
+    Terminated   ///< Thread has finished execution
+};
 
 class JavaThread {
 public:
     /// Construct a thread with the given name and optional stack depth limit.
+    /// Thread starts in ThreadState::New.
     explicit JavaThread(std::string name = "main",
                         std::size_t max_stack_depth = kDefaultMaxStackDepth);
 
-    // Non-copyable, moveable (thread identity semantics)
+    // Non-copyable (owns std::thread)
     JavaThread(const JavaThread&) = delete;
     JavaThread& operator=(const JavaThread&) = delete;
-    JavaThread(JavaThread&&) noexcept = default;
-    JavaThread& operator=(JavaThread&&) noexcept = default;
-    ~JavaThread() = default;
+
+    // Moveable
+    JavaThread(JavaThread&&) noexcept;
+    JavaThread& operator=(JavaThread&&) noexcept;
+
+    /// Destructor joins the OS thread if still joinable.
+    ~JavaThread();
+
+    // ===== OS Thread Lifecycle =====
+
+    /// Start the thread on a new OS thread (§2.5.1: 1:1 model).
+    /// @param entry  The function to execute on the new thread. Receives
+    ///               a reference to this JavaThread as its context.
+    /// Transitions: New → Runnable.
+    void start(std::function<void(JavaThread&)> entry);
+
+    /// Block the calling thread until this thread finishes.
+    /// Transitions: Runnable → Terminated (after the entry function returns).
+    void join();
+
+    /// Get the current thread state.
+    [[nodiscard]] ThreadState state() const noexcept;
 
     // ===== Frame Management (§2.5.2, §2.6) =====
 
@@ -69,6 +98,8 @@ public:
     // ===== Thread Metadata =====
 
     [[nodiscard]] const std::string& name() const noexcept;
+
+    /// @deprecated Use state() instead. Kept for backward compatibility.
     [[nodiscard]] bool is_alive() const noexcept;
     void set_alive(bool alive) noexcept;
 
@@ -76,7 +107,8 @@ private:
     std::string name_;
     std::vector<std::unique_ptr<Frame>> stack_;   ///< JVM Stack (§2.5.2)
     std::size_t max_stack_depth_;
-    bool alive_ = true;
+    ThreadState state_ = ThreadState::New;
+    std::thread os_thread_;                       ///< Underlying OS thread (§2.5.1)
 };
 
 } // namespace aijvm::runtime

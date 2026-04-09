@@ -68,164 +68,142 @@ void register_java_lang_StringBuilder(NativeMethodRegistry& registry) {
     // StringBuilder.<init>:()V — initialize empty buffer
     registry.register_method(
         NativeMethodRegistry::make_key("java/lang/StringBuilder", "<init>", "()V"),
-        []([[maybe_unused]] JavaThread& thread,
-           Frame& frame,
-           Heap& heap) {
-            auto* sb = static_cast<JObject*>(frame.pop_ref());  // this
-            if (sb) set_sb_buffer(sb, "", heap);
+        []([[maybe_unused]] VMContext& ctx) {
+            auto* sb = static_cast<JObject*>(ctx.frame.pop_ref());  // this
+            if (sb) set_sb_buffer(sb, "", ctx.heap);
         });
 
     // StringBuilder.<init>:(Ljava/lang/String;)V — init with string
     registry.register_method(
         NativeMethodRegistry::make_key("java/lang/StringBuilder", "<init>",
             "(Ljava/lang/String;)V"),
-        []([[maybe_unused]] JavaThread& thread,
-           Frame& frame,
-           Heap& heap) {
-            auto* str = static_cast<JObject*>(frame.pop_ref());  // string arg
-            auto* sb = static_cast<JObject*>(frame.pop_ref());   // this
-            if (sb) set_sb_buffer(sb, extract_java_string(str), heap);
+        []([[maybe_unused]] VMContext& ctx) {
+            auto* str = static_cast<JObject*>(ctx.frame.pop_ref());  // string arg
+            auto* sb = static_cast<JObject*>(ctx.frame.pop_ref());   // this
+            if (sb) set_sb_buffer(sb, extract_java_string(str), ctx.heap);
         });
 
     // StringBuilder.<init>:(I)V — init with capacity (ignore capacity)
     registry.register_method(
         NativeMethodRegistry::make_key("java/lang/StringBuilder", "<init>", "(I)V"),
-        []([[maybe_unused]] JavaThread& thread,
-           Frame& frame,
-           Heap& heap) {
-            (void)frame.pop_int();  // capacity
-            auto* sb = static_cast<JObject*>(frame.pop_ref());  // this
-            if (sb) set_sb_buffer(sb, "", heap);
+        []([[maybe_unused]] VMContext& ctx) {
+            (void)ctx.frame.pop_int();  // capacity
+            auto* sb = static_cast<JObject*>(ctx.frame.pop_ref());  // this
+            if (sb) set_sb_buffer(sb, "", ctx.heap);
         });
 
     // append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
     registry.register_method(
         NativeMethodRegistry::make_key("java/lang/StringBuilder", "append",
             "(Ljava/lang/String;)Ljava/lang/StringBuilder;"),
-        []([[maybe_unused]] JavaThread& thread,
-           Frame& frame,
-           Heap& heap) {
-            auto* str = static_cast<JObject*>(frame.pop_ref());  // string arg
-            auto* sb = static_cast<JObject*>(frame.pop_ref());   // this
+        []([[maybe_unused]] VMContext& ctx) {
+            auto* str = static_cast<JObject*>(ctx.frame.pop_ref());  // string arg
+            auto* sb = static_cast<JObject*>(ctx.frame.pop_ref());   // this
             if (sb) {
                 auto buf = get_sb_buffer(sb);
                 buf += extract_java_string(str);
-                set_sb_buffer(sb, buf, heap);
+                set_sb_buffer(sb, buf, ctx.heap);
             }
-            frame.push_ref(sb);  // return this
+            ctx.frame.push_ref(sb);  // return this
         });
 
     // append:(I)Ljava/lang/StringBuilder;
     registry.register_method(
         NativeMethodRegistry::make_key("java/lang/StringBuilder", "append",
             "(I)Ljava/lang/StringBuilder;"),
-        []([[maybe_unused]] JavaThread& thread,
-           Frame& frame,
-           Heap& heap) {
-            auto val = frame.pop_int();
-            auto* sb = static_cast<JObject*>(frame.pop_ref());
+        []([[maybe_unused]] VMContext& ctx) {
+            auto val = ctx.frame.pop_int();
+            auto* sb = static_cast<JObject*>(ctx.frame.pop_ref());
             if (sb) {
                 auto buf = get_sb_buffer(sb);
                 buf += std::to_string(val);
-                set_sb_buffer(sb, buf, heap);
+                set_sb_buffer(sb, buf, ctx.heap);
             }
-            frame.push_ref(sb);
+            ctx.frame.push_ref(sb);
         });
 
     // append:(J)Ljava/lang/StringBuilder;
     registry.register_method(
         NativeMethodRegistry::make_key("java/lang/StringBuilder", "append",
             "(J)Ljava/lang/StringBuilder;"),
-        []([[maybe_unused]] JavaThread& thread,
-           Frame& frame,
-           Heap& heap) {
-            auto val = frame.pop_long();
-            auto* sb = static_cast<JObject*>(frame.pop_ref());
+        []([[maybe_unused]] VMContext& ctx) {
+            auto val = ctx.frame.pop_long();
+            auto* sb = static_cast<JObject*>(ctx.frame.pop_ref());
             if (sb) {
                 auto buf = get_sb_buffer(sb);
                 buf += std::to_string(val);
-                set_sb_buffer(sb, buf, heap);
+                set_sb_buffer(sb, buf, ctx.heap);
             }
-            frame.push_ref(sb);
+            ctx.frame.push_ref(sb);
         });
 
     // append:(D)Ljava/lang/StringBuilder;
     registry.register_method(
         NativeMethodRegistry::make_key("java/lang/StringBuilder", "append",
             "(D)Ljava/lang/StringBuilder;"),
-        []([[maybe_unused]] JavaThread& thread,
-           Frame& frame,
-           Heap& heap) {
-            auto val = frame.pop_double();
-            auto* sb = static_cast<JObject*>(frame.pop_ref());
+        []([[maybe_unused]] VMContext& ctx) {
+            auto val = ctx.frame.pop_double();
+            auto* sb = static_cast<JObject*>(ctx.frame.pop_ref());
             if (sb) {
                 auto buf = get_sb_buffer(sb);
                 buf += std::to_string(val);
-                set_sb_buffer(sb, buf, heap);
+                set_sb_buffer(sb, buf, ctx.heap);
             }
-            frame.push_ref(sb);
+            ctx.frame.push_ref(sb);
         });
 
     // append:(F)Ljava/lang/StringBuilder;
     registry.register_method(
         NativeMethodRegistry::make_key("java/lang/StringBuilder", "append",
             "(F)Ljava/lang/StringBuilder;"),
-        []([[maybe_unused]] JavaThread& thread,
-           Frame& frame,
-           Heap& heap) {
-            auto val = frame.pop_float();
-            auto* sb = static_cast<JObject*>(frame.pop_ref());
+        []([[maybe_unused]] VMContext& ctx) {
+            auto val = ctx.frame.pop_float();
+            auto* sb = static_cast<JObject*>(ctx.frame.pop_ref());
             if (sb) {
                 auto buf = get_sb_buffer(sb);
                 buf += std::to_string(val);
-                set_sb_buffer(sb, buf, heap);
+                set_sb_buffer(sb, buf, ctx.heap);
             }
-            frame.push_ref(sb);
+            ctx.frame.push_ref(sb);
         });
 
     // append:(Z)Ljava/lang/StringBuilder;
     registry.register_method(
         NativeMethodRegistry::make_key("java/lang/StringBuilder", "append",
             "(Z)Ljava/lang/StringBuilder;"),
-        []([[maybe_unused]] JavaThread& thread,
-           Frame& frame,
-           Heap& heap) {
-            auto val = frame.pop_int();
-            auto* sb = static_cast<JObject*>(frame.pop_ref());
+        []([[maybe_unused]] VMContext& ctx) {
+            auto val = ctx.frame.pop_int();
+            auto* sb = static_cast<JObject*>(ctx.frame.pop_ref());
             if (sb) {
                 auto buf = get_sb_buffer(sb);
                 buf += val ? "true" : "false";
-                set_sb_buffer(sb, buf, heap);
+                set_sb_buffer(sb, buf, ctx.heap);
             }
-            frame.push_ref(sb);
+            ctx.frame.push_ref(sb);
         });
 
     // append:(C)Ljava/lang/StringBuilder;
     registry.register_method(
         NativeMethodRegistry::make_key("java/lang/StringBuilder", "append",
             "(C)Ljava/lang/StringBuilder;"),
-        []([[maybe_unused]] JavaThread& thread,
-           Frame& frame,
-           Heap& heap) {
-            auto val = frame.pop_int();
-            auto* sb = static_cast<JObject*>(frame.pop_ref());
+        []([[maybe_unused]] VMContext& ctx) {
+            auto val = ctx.frame.pop_int();
+            auto* sb = static_cast<JObject*>(ctx.frame.pop_ref());
             if (sb) {
                 auto buf = get_sb_buffer(sb);
                 buf += static_cast<char>(val);
-                set_sb_buffer(sb, buf, heap);
+                set_sb_buffer(sb, buf, ctx.heap);
             }
-            frame.push_ref(sb);
+            ctx.frame.push_ref(sb);
         });
 
     // append:(Ljava/lang/Object;)Ljava/lang/StringBuilder;
     registry.register_method(
         NativeMethodRegistry::make_key("java/lang/StringBuilder", "append",
             "(Ljava/lang/Object;)Ljava/lang/StringBuilder;"),
-        []([[maybe_unused]] JavaThread& thread,
-           Frame& frame,
-           Heap& heap) {
-            auto* obj = static_cast<JObject*>(frame.pop_ref());
-            auto* sb = static_cast<JObject*>(frame.pop_ref());
+        []([[maybe_unused]] VMContext& ctx) {
+            auto* obj = static_cast<JObject*>(ctx.frame.pop_ref());
+            auto* sb = static_cast<JObject*>(ctx.frame.pop_ref());
             if (sb) {
                 auto buf = get_sb_buffer(sb);
                 if (!obj) {
@@ -235,22 +213,20 @@ void register_java_lang_StringBuilder(NativeMethodRegistry& registry) {
                 } else {
                     buf += obj->class_name + "@0x...";
                 }
-                set_sb_buffer(sb, buf, heap);
+                set_sb_buffer(sb, buf, ctx.heap);
             }
-            frame.push_ref(sb);
+            ctx.frame.push_ref(sb);
         });
 
     // toString:()Ljava/lang/String;
     registry.register_method(
         NativeMethodRegistry::make_key("java/lang/StringBuilder", "toString",
             "()Ljava/lang/String;"),
-        []([[maybe_unused]] JavaThread& thread,
-           Frame& frame,
-           Heap& heap) {
-            auto* sb = static_cast<JObject*>(frame.pop_ref());  // this
+        []([[maybe_unused]] VMContext& ctx) {
+            auto* sb = static_cast<JObject*>(ctx.frame.pop_ref());  // this
             auto buf = get_sb_buffer(sb);
-            auto* str = make_java_string(buf, heap);
-            frame.push_ref(str);
+            auto* str = make_java_string(buf, ctx.heap);
+            ctx.frame.push_ref(str);
         });
 }
 
