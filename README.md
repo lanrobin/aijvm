@@ -20,7 +20,7 @@ AIJVM is a working JVM interpreter that can execute compiled Java `.class` files
 | C++ source + headers | ~7,100 lines |
 | Test code | ~2,100 lines |
 | Unit tests (GoogleTest) | 121 |
-| AI prompts (docs/) | 18 iterations |
+| AI prompts (docs/) | 19 iterations |
 | Hand-written C++ | 0 lines |
 
 ## Demo Programs
@@ -30,8 +30,10 @@ AIJVM is a working JVM interpreter that can execute compiled Java `.class` files
 | `HelloWorld` | `System.out.println`, `StringBuilder` string concatenation, `ldc`, `invokevirtual` |
 | `HelloAdd` | Integer arithmetic (`iadd`, `iconst`, `istore`, `iload`, `bipush`) |
 | `StaticInitTest` | `<clinit>` static initializer execution, `getstatic`/`putstatic`, `invokestatic` |
+| `StaticBlockTest` | Static blocks with multiple fields and string init, per-class `InitState` tracking |
 | `ProduceConsumer` | Real multithreading: `Thread.start()`/`join()`, `synchronized` methods, `wait()`/`notifyAll()`, anonymous inner classes |
-| `GCTest` | Cheney's semi-space GC: allocates 40K+ objects, `System.gc()` explicit collection, linked-list traversal verifying survived objects |
+| `GCTest` | Cheney's semi-space GC: allocates objects in bulk, `System.gc()` explicit collection, linked-list traversal verifying survived objects |
+| `GCStressTest` | Array allocation + GC trigger with small heap |
 
 ## Prerequisites
 
@@ -111,7 +113,7 @@ Hello, World! The sum of 5 and 10 is 15
 
 ```bash
 cd build
-./tests/run_tests
+./tests/aijvm_tests
 ```
 
 ## Project Structure
@@ -139,7 +141,7 @@ Each file in `docs/` is a natural language prompt given to Claude AI. The prompt
 3. **Tests** — AI generates GoogleTest cases alongside every implementation
 4. **Iterate** — Run, find errors, give error output back to AI, fix
 
-The 18 prompt iterations built the JVM incrementally:
+The 19 prompt iterations built the JVM incrementally:
 
 | # | Prompt | Subsystem |
 |---|--------|-----------|
@@ -159,6 +161,9 @@ The 18 prompt iterations built the JVM incrementally:
 | 14 | Fix: ProduceConsumer | `Thread.start/join`, `Object.wait/notifyAll`, `ACC_SYNCHRONIZED`, `monitorenter/monitorexit` with `std::recursive_mutex` + `condition_variable_any` |
 | 15 | Garbage collection | Semi-space copying GC (Cheney's), `-Xmx`, `SafepointManager` |
 | 16 | Fix: GCTest | `System.gc()` native, root scanning from Frame slots, forwarding pointer updates |
+| 17 | Fix: VS2022 build | Cross-platform compatibility fixes for MSVC |
+| 18 | Update README | Project documentation |
+| 19 | Class init optimization | Moved `ClassInitState` from Heap map to per-`ClassFile` field |
 
 ## License
 
