@@ -13,14 +13,26 @@ namespace aijvm::runtime {
 
 using namespace classfile;
 
+/// Thread-local pointer to the current JavaThread executing on this OS thread.
+/// Used by the heap GC trigger callback to identify which thread initiated GC.
+static thread_local JavaThread* tl_current_thread = nullptr;
+
 Interpreter::Interpreter(Heap& heap, classloader::ClassLoader& class_loader,
                          NativeMethodRegistry& native_registry,
                          SafepointManager& safepoint_mgr)
     : heap_(heap), class_loader_(class_loader), native_registry_(native_registry),
-      safepoint_mgr_(safepoint_mgr) {}
+      safepoint_mgr_(safepoint_mgr) {
+    // Install GC trigger callback so heap allocations can request STW GC
+    heap_.set_gc_trigger([this]() {
+        if (tl_current_thread) {
+            trigger_gc(*tl_current_thread);
+        }
+    });
+}
 
 void Interpreter::execute(JavaThread& thread) {
     safepoint_mgr_.register_thread(&thread);
+    tl_current_thread = &thread;
     while (auto* frame = thread.current_frame()) {
         // Safepoint poll at each instruction boundary
         safepoint_mgr_.safepoint_poll();
@@ -30,6 +42,7 @@ void Interpreter::execute(JavaThread& thread) {
         }
         if (!execute_instruction(thread, *frame)) {
             if (thread.stack_empty()) {
+                tl_current_thread = nullptr;
                 safepoint_mgr_.unregister_thread(&thread);
                 return;
             }

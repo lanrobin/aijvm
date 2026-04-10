@@ -509,10 +509,10 @@ TEST(HeapAutoGCTest, ShouldGcReturnsFalseBelowThreshold) {
 }
 
 TEST(HeapAutoGCTest, ShouldGcReturnsTrueAboveThreshold) {
-    // max_heap_size = 4096 => threshold = 2048
-    // Need enough objects so object_count * 256 > 2048 => > 8 objects
-    Heap heap(std::make_unique<SemiSpaceGC>(), 4096);
-    for (int i = 0; i < 10; ++i) {
+    // Each empty object ~128 bytes. Threshold = max/2 = 512.
+    // 5 objects = 640 > 512 => should trigger
+    Heap heap(std::make_unique<SemiSpaceGC>(), 1024);
+    for (int i = 0; i < 5; ++i) {
         heap.allocate_object("java/lang/Object");
     }
     EXPECT_TRUE(heap.should_gc());
@@ -520,8 +520,8 @@ TEST(HeapAutoGCTest, ShouldGcReturnsTrueAboveThreshold) {
 
 TEST(HeapAutoGCTest, ShouldGcReturnsFalseAfterGcWithNoNewAllocations) {
     // After GC runs, should_gc() returns false until new allocations happen
-    Heap heap(std::make_unique<SemiSpaceGC>(), 4096);
-    for (int i = 0; i < 10; ++i) {
+    Heap heap(std::make_unique<SemiSpaceGC>(), 1024);
+    for (int i = 0; i < 5; ++i) {
         heap.allocate_object("java/lang/Object");
     }
     EXPECT_TRUE(heap.should_gc());
@@ -534,8 +534,8 @@ TEST(HeapAutoGCTest, ShouldGcReturnsFalseAfterGcWithNoNewAllocations) {
 }
 
 TEST(HeapAutoGCTest, ShouldGcReturnsTrueAfterNewAllocationsPostGc) {
-    Heap heap(std::make_unique<SemiSpaceGC>(), 4096);
-    for (int i = 0; i < 10; ++i) {
+    Heap heap(std::make_unique<SemiSpaceGC>(), 1024);
+    for (int i = 0; i < 5; ++i) {
         heap.allocate_object("java/lang/Object");
     }
 
@@ -544,7 +544,7 @@ TEST(HeapAutoGCTest, ShouldGcReturnsTrueAfterNewAllocationsPostGc) {
     EXPECT_FALSE(heap.should_gc());
 
     // Allocate again past threshold
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < 5; ++i) {
         heap.allocate_object("java/lang/Object");
     }
     EXPECT_TRUE(heap.should_gc());

@@ -26,6 +26,25 @@ std::int32_t JObject::array_length() const noexcept {
     }
 }
 
+std::size_t JObject::estimated_size() const noexcept {
+    // Base overhead: JObject struct itself (~128 bytes for vtable-less struct
+    // with string, maps, vectors, mutex, etc.) — use a conservative estimate.
+    constexpr std::size_t base = 128;
+    std::size_t size = base;
+    // Instance field map overhead
+    size += fields.size() * 64;  // rough: key string + variant per entry
+    // Array data
+    size += array_int.capacity() * sizeof(std::int32_t);
+    size += array_long.capacity() * sizeof(std::int64_t);
+    size += array_float.capacity() * sizeof(float);
+    size += array_double.capacity() * sizeof(double);
+    size += array_byte.capacity() * sizeof(std::int8_t);
+    size += array_char.capacity() * sizeof(std::uint16_t);
+    size += array_short.capacity() * sizeof(std::int16_t);
+    size += array_ref.capacity() * sizeof(void*);
+    return size;
+}
+
 // ============================================================================
 // NoOpGC
 // ============================================================================
@@ -184,10 +203,12 @@ Heap::Heap(Heap&&) noexcept = default;
 Heap& Heap::operator=(Heap&&) noexcept = default;
 
 JObject* Heap::allocate_object(const std::string& class_name) {
+    check_heap_pressure(128);
     auto obj = std::make_unique<JObject>();
     obj->class_name = class_name;
     obj->kind = ObjectKind::Instance;
     auto* ptr = obj.get();
+    current_usage_ += ptr->estimated_size();
     objects_.push_back(std::move(obj));
     return ptr;
 }
@@ -197,8 +218,17 @@ JObject* Heap::allocate_primitive_array(std::uint8_t atype, std::int32_t length)
         throw std::runtime_error(std::format(
             "NegativeArraySizeException: {}", length));
     }
-    auto obj = std::make_unique<JObject>();
+    // Estimate allocation size for heap pressure check
     auto len = static_cast<std::size_t>(length);
+    std::size_t elem_size = 1;  // default for byte
+    switch (atype) {
+    case ArrayType::T_CHAR: case ArrayType::T_SHORT: elem_size = 2; break;
+    case ArrayType::T_INT: case ArrayType::T_FLOAT: elem_size = 4; break;
+    case ArrayType::T_LONG: case ArrayType::T_DOUBLE: elem_size = 8; break;
+    default: break;
+    }
+    check_heap_pressure(128 + len * elem_size);
+    auto obj = std::make_unique<JObject>();
     switch (atype) {
     case ArrayType::T_BOOLEAN:
     case ArrayType::T_BYTE:
@@ -241,6 +271,7 @@ JObject* Heap::allocate_primitive_array(std::uint8_t atype, std::int32_t length)
             "Invalid newarray atype: {}", atype));
     }
     auto* ptr = obj.get();
+    current_usage_ += ptr->estimated_size();
     objects_.push_back(std::move(obj));
     return ptr;
 }
@@ -251,11 +282,13 @@ JObject* Heap::allocate_ref_array(const std::string& element_class,
         throw std::runtime_error(std::format(
             "NegativeArraySizeException: {}", length));
     }
+    check_heap_pressure(128 + static_cast<std::size_t>(length) * sizeof(void*));
     auto obj = std::make_unique<JObject>();
     obj->class_name = "[L" + element_class + ";";
     obj->kind = ObjectKind::ArrayRef;
     obj->array_ref.resize(static_cast<std::size_t>(length), nullptr);
     auto* ptr = obj.get();
+    current_usage_ += ptr->estimated_size();
     objects_.push_back(std::move(obj));
     return ptr;
 }
@@ -288,18 +321,23 @@ void Heap::gc(const std::vector<JObject*>& roots) {
 
     // Record object count after GC to prevent re-triggering without new allocations
     last_gc_object_count_ = objects_.size();
+
+    // Recompute actual memory usage after GC
+    current_usage_ = 0;
+    for (auto& o : objects_) {
+        current_usage_ += o->estimated_size();
+    }
 }
 
 bool Heap::should_gc() const noexcept {
     if (max_heap_size_ == 0) return false;
     // Don't re-trigger if no new allocations since last GC
     if (objects_.size() == last_gc_object_count_) return false;
-    return estimated_memory_usage() > max_heap_size_ / 2;
+    return current_usage_ > max_heap_size_ / 2;
 }
 
 std::size_t Heap::estimated_memory_usage() const noexcept {
-    // Rough estimate: 256 bytes per object (class name, fields, arrays average)
-    return objects_.size() * 256;
+    return current_usage_;
 }
 
 std::size_t Heap::max_heap_size() const noexcept {
@@ -327,6 +365,30 @@ void Heap::init_system_classes() {
     // Create System.err — same as out for now
     auto* err_stream = allocate_object("java/io/PrintStream");
     set_static_field("java/lang/System.err", static_cast<void*>(err_stream));
+}
+
+void Heap::set_gc_trigger(GcTriggerFn fn) {
+    gc_trigger_fn_ = std::move(fn);
+}
+
+void Heap::check_heap_pressure(std::size_t alloc_size) {
+    if (max_heap_size_ == 0) return;  // unlimited heap
+
+    if (current_usage_ + alloc_size > max_heap_size_ / 2) {
+        // Attempt GC if possible (have a trigger callback and new allocs since last GC)
+        if (gc_trigger_fn_ && objects_.size() != last_gc_object_count_) {
+            AIJVM_LOG_INFO("Heap pressure: usage={}B + alloc={}B > threshold={}B, triggering GC",
+                           current_usage_, alloc_size, max_heap_size_ / 2);
+            gc_trigger_fn_();
+        }
+
+        // After GC (or if no GC was possible), check hard limit
+        if (current_usage_ + alloc_size > max_heap_size_) {
+            throw std::runtime_error(std::format(
+                "OutOfMemoryError: Java heap space (used={}B, alloc={}B, max={}B)",
+                current_usage_, alloc_size, max_heap_size_));
+        }
+    }
 }
 
 } // namespace aijvm::runtime

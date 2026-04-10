@@ -2,6 +2,7 @@
 
 #include <condition_variable>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -85,6 +86,9 @@ struct JObject {
 
     /// Get array length regardless of element type
     [[nodiscard]] std::int32_t array_length() const noexcept;
+
+    /// Estimate the memory footprint of this object in bytes.
+    [[nodiscard]] std::size_t estimated_size() const noexcept;
 
     // ----- Monitor (§8.13 / §17.1) -----
     /// Per-object recursive mutex for synchronized methods and monitorenter/monitorexit.
@@ -218,11 +222,23 @@ public:
     /// Called once during JVM boot.
     void init_system_classes();
 
+    /// Set a GC trigger callback. The heap calls this when allocation
+    /// pressure requires a GC cycle. Installed by the Interpreter.
+    using GcTriggerFn = std::function<void()>;
+    void set_gc_trigger(GcTriggerFn fn);
+
 private:
+    /// Check heap pressure and attempt GC before allocation.
+    /// @param alloc_size  Estimated size of the pending allocation.
+    /// Throws std::runtime_error (OutOfMemoryError) if heap is still full after GC.
+    void check_heap_pressure(std::size_t alloc_size);
+
     std::vector<std::unique_ptr<JObject>> objects_;
     std::unique_ptr<GarbageCollector> gc_;
     std::size_t max_heap_size_ = 0;
+    std::size_t current_usage_ = 0;         // Tracked actual memory usage
     std::size_t last_gc_object_count_ = 0;  // Guard against repeated GC when nothing can be freed
+    GcTriggerFn gc_trigger_fn_;             // Callback to trigger STW GC
     std::unordered_map<std::string, FieldValue> static_fields_;
 };
 
