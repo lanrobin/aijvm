@@ -46,6 +46,13 @@ public:
     /// Check whether a class has already been loaded (cached).
     [[nodiscard]] bool is_loaded(std::string_view class_name) const;
 
+    /// Get all loaded (cached) ClassFile instances.
+    /// Safe to call during STW pause when all mutator threads are parked.
+    /// Not thread-safe for concurrent access — use only under STW or
+    /// single-threaded initialization contexts.
+    [[nodiscard]] std::vector<std::shared_ptr<classfile::ClassFile>>
+    get_all_loaded_classes() const;
+
 private:
     /// Try to load from java.base.jmod (system/bootstrap loader).
     std::shared_ptr<classfile::ClassFile>

@@ -671,3 +671,142 @@ TEST(SafepointSTWTest, STWCollectsRootsFromAllThreads) {
     mgr.unregister_thread(&t1);
     mgr.unregister_thread(&t2);
 }
+
+// ============================================================================
+// Static Field GC Root Tests — Heap::collect_static_roots()
+// ============================================================================
+
+TEST(HeapStaticRootsTest, CollectStaticRootsReturnsReferenceFields) {
+    Heap heap(std::make_unique<SemiSpaceGC>(), 65536);
+
+    // Allocate objects and store as static fields
+    auto* obj1 = heap.allocate_object("test/StaticHolder");
+    auto* obj2 = heap.allocate_object("test/AnotherHolder");
+
+    heap.set_static_field("test/MyClass.refField", static_cast<void*>(obj1));
+    heap.set_static_field("test/MyClass.anotherRef", static_cast<void*>(obj2));
+    // Primitive static fields should NOT appear in roots
+    heap.set_static_field("test/MyClass.intField", std::int32_t{42});
+    heap.set_static_field("test/MyClass.longField", std::int64_t{100});
+    heap.set_static_field("test/MyClass.floatField", 3.14f);
+    heap.set_static_field("test/MyClass.doubleField", 2.718);
+
+    std::vector<JObject*> roots;
+    heap.collect_static_roots(roots);
+
+    // Only the two reference fields should be collected
+    EXPECT_EQ(roots.size(), 2u);
+    EXPECT_TRUE(std::find(roots.begin(), roots.end(), obj1) != roots.end());
+    EXPECT_TRUE(std::find(roots.begin(), roots.end(), obj2) != roots.end());
+}
+
+TEST(HeapStaticRootsTest, CollectStaticRootsSkipsNullReferences) {
+    Heap heap(std::make_unique<SemiSpaceGC>(), 65536);
+
+    // Null reference should not be collected as a root
+    heap.set_static_field("test/MyClass.nullRef", static_cast<void*>(nullptr));
+    heap.set_static_field("test/MyClass.intField", std::int32_t{0});
+
+    std::vector<JObject*> roots;
+    heap.collect_static_roots(roots);
+
+    EXPECT_TRUE(roots.empty());
+}
+
+TEST(HeapStaticRootsTest, CollectStaticRootsEmptyWhenNoStaticFields) {
+    Heap heap(std::make_unique<SemiSpaceGC>(), 65536);
+
+    std::vector<JObject*> roots;
+    heap.collect_static_roots(roots);
+
+    EXPECT_TRUE(roots.empty());
+}
+
+TEST(HeapStaticRootsTest, IterateStaticReferenceRootsVisitsAllRefs) {
+    Heap heap(std::make_unique<SemiSpaceGC>(), 65536);
+
+    auto* obj1 = heap.allocate_object("test/A");
+    auto* obj2 = heap.allocate_object("test/B");
+
+    heap.set_static_field("test/X.ref1", static_cast<void*>(obj1));
+    heap.set_static_field("test/X.ref2", static_cast<void*>(obj2));
+    heap.set_static_field("test/X.prim", std::int32_t{99});
+
+    std::vector<void*> visited;
+    heap.iterate_static_reference_roots([&visited](void** slot) {
+        visited.push_back(*slot);
+    });
+
+    EXPECT_EQ(visited.size(), 2u);
+}
+
+TEST(HeapStaticRootsTest, GCPreservesObjectsReachableOnlyViaStaticFields) {
+    // This is the critical test: objects referenced ONLY by static fields
+    // (not on any thread stack) must survive GC.
+    Heap heap(std::make_unique<SemiSpaceGC>(), 65536);
+
+    auto* obj = heap.allocate_object("test/StaticOnly");
+    heap.set_static_field("test/Holder.instance", static_cast<void*>(obj));
+
+    // Allocate some garbage objects (unreachable)
+    heap.allocate_object("test/Garbage1");
+    heap.allocate_object("test/Garbage2");
+
+    EXPECT_EQ(heap.object_count(), 3u);
+
+    // GC with NO thread-stack roots — only static roots should keep obj alive
+    heap.gc({});
+
+    // Only the static-referenced object should survive
+    EXPECT_EQ(heap.object_count(), 1u);
+
+    // The static field should now point to the forwarded copy
+    auto* stored = heap.get_static_field("test/Holder.instance");
+    ASSERT_NE(stored, nullptr);
+    auto* ref = std::get_if<void*>(stored);
+    ASSERT_NE(ref, nullptr);
+    ASSERT_NE(*ref, nullptr);
+
+    // The surviving object should have the correct class name
+    auto* surviving = static_cast<JObject*>(*ref);
+    EXPECT_EQ(surviving->class_name, "test/StaticOnly");
+}
+
+TEST(HeapStaticRootsTest, GCPreservesTransitiveRefsFromStaticFields) {
+    // Object graph: static -> A -> B (via instance field)
+    // Both A and B must survive even with empty thread-stack roots.
+    Heap heap(std::make_unique<SemiSpaceGC>(), 65536);
+
+    auto* objA = heap.allocate_object("test/A");
+    auto* objB = heap.allocate_object("test/B");
+
+    // A's field points to B
+    objA->fields["test/A.child"] = static_cast<void*>(objB);
+
+    // Static field points to A
+    heap.set_static_field("test/Root.holder", static_cast<void*>(objA));
+
+    // Unreachable garbage
+    heap.allocate_object("test/Garbage");
+
+    EXPECT_EQ(heap.object_count(), 3u);
+
+    heap.gc({});
+
+    // A and B survive, Garbage is collected
+    EXPECT_EQ(heap.object_count(), 2u);
+
+    // Verify static field updated to forwarded A
+    auto* stored = heap.get_static_field("test/Root.holder");
+    ASSERT_NE(stored, nullptr);
+    auto* surviving_a = static_cast<JObject*>(*std::get_if<void*>(stored));
+    ASSERT_NE(surviving_a, nullptr);
+    EXPECT_EQ(surviving_a->class_name, "test/A");
+
+    // Verify A's child field updated to forwarded B
+    auto it = surviving_a->fields.find("test/A.child");
+    ASSERT_NE(it, surviving_a->fields.end());
+    auto* surviving_b = static_cast<JObject*>(*std::get_if<void*>(&it->second));
+    ASSERT_NE(surviving_b, nullptr);
+    EXPECT_EQ(surviving_b->class_name, "test/B");
+}

@@ -293,13 +293,39 @@ JObject* Heap::allocate_ref_array(const std::string& element_class,
     return ptr;
 }
 
+void Heap::collect_static_roots(std::vector<JObject*>& roots) const {
+    for (const auto& [key, fv] : static_fields_) {
+        if (const auto* ref = std::get_if<void*>(&fv)) {
+            if (*ref) {
+                roots.push_back(static_cast<JObject*>(*ref));
+            }
+        }
+    }
+}
+
+void Heap::iterate_static_reference_roots(std::function<void(void**)> visitor) {
+    for (auto& [key, fv] : static_fields_) {
+        if (auto* ref = std::get_if<void*>(&fv)) {
+            if (*ref) {
+                visitor(ref);
+            }
+        }
+    }
+}
+
 void Heap::gc(const std::vector<JObject*>& roots) {
+    // §2.5.4: Augment thread-stack roots with static field references.
+    // Static fields are strong GC roots — objects reachable only through
+    // static fields must not be collected.
+    std::vector<JObject*> all_roots = roots;
+    collect_static_roots(all_roots);
+
     std::vector<JObject*> raw_ptrs;
     raw_ptrs.reserve(objects_.size());
     for (auto& o : objects_) {
         raw_ptrs.push_back(o.get());
     }
-    gc_->collect(raw_ptrs, roots);
+    gc_->collect(raw_ptrs, all_roots);
 
     // If the GC is SemiSpaceGC, adopt the new to-space and update static fields
     if (auto* ssgc = dynamic_cast<SemiSpaceGC*>(gc_.get())) {
@@ -370,6 +396,7 @@ void Heap::init_system_classes() {
 void Heap::set_gc_trigger(GcTriggerFn fn) {
     gc_trigger_fn_ = std::move(fn);
 }
+
 
 void Heap::check_heap_pressure(std::size_t alloc_size) {
     if (max_heap_size_ == 0) return;  // unlimited heap

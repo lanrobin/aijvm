@@ -949,4 +949,34 @@ const std::string& ClassFile::get_utf8(std::uint16_t index) const {
     return resolve_utf8(constant_pool, index);
 }
 
+// ============================================================================
+// §4.3.2 Static Reference Field Metadata
+// ============================================================================
+void ClassFile::compute_static_ref_fields() const {
+    if (static_ref_fields_computed_) return;
+
+    for (const auto& f : fields) {
+        // Only static fields
+        if (!(f.access_flags & FieldAccess::ACC_STATIC)) continue;
+
+        // Resolve descriptor from constant pool
+        const auto& desc = resolve_utf8(constant_pool, f.descriptor_index);
+        if (desc.empty()) continue;
+
+        // §4.3.2: Reference types start with 'L' (object) or '[' (array)
+        char first = desc[0];
+        if (first == 'L' || first == '[') {
+            const auto& name = resolve_utf8(constant_pool, f.name_index);
+            static_ref_field_names_.push_back(name);
+        }
+    }
+
+    static_ref_fields_computed_ = true;
+}
+
+const std::vector<std::string>& ClassFile::get_static_ref_field_names() const {
+    compute_static_ref_fields();
+    return static_ref_field_names_;
+}
+
 } // namespace aijvm::classfile

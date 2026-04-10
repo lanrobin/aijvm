@@ -649,6 +649,25 @@ public:
     /// Current initialization state. Defaults to Uninitialized.
     /// Mutable because ensure_initialized may be called with a shared_ptr<const ClassFile>.
     mutable InitState init_state = InitState::Uninitialized;
+
+    // ===== §4.3.2 Static Reference Field Metadata =====
+    // Cached names of static fields whose descriptors begin with 'L' (object
+    // reference) or '[' (array reference). Built lazily on first access by
+    // examining each field_info with ACC_STATIC set and resolving its
+    // descriptor from the constant pool. Used by GC to identify which static
+    // field slots in the Heap contain object references (GC roots).
+
+    /// Compute and cache the names of static reference-typed fields.
+    /// Inspects field descriptors per §4.3.2 for 'L' or '[' prefix.
+    void compute_static_ref_fields() const;
+
+    /// Get cached static reference field names (just the field name, not
+    /// qualified). Returns empty if no static reference fields exist.
+    [[nodiscard]] const std::vector<std::string>& get_static_ref_field_names() const;
+
+private:
+    mutable std::vector<std::string> static_ref_field_names_;
+    mutable bool static_ref_fields_computed_ = false;
 };
 
 } // namespace aijvm::classfile

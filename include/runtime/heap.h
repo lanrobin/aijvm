@@ -222,6 +222,19 @@ public:
     /// Called once during JVM boot.
     void init_system_classes();
 
+    /// Collect static field GC roots — reference-typed static field values.
+    /// Only adds void* (reference-typed) entries from static_fields_, never
+    /// primitives. This leverages the std::variant<..., void*> discriminator
+    /// in FieldValue to safely distinguish references from primitives.
+    /// §2.5.4: "The method area stores per-class structures" — static field
+    /// references are strong GC roots that must keep objects alive.
+    void collect_static_roots(std::vector<JObject*>& roots) const;
+
+    /// Visitor-based static reference root iteration.
+    /// The visitor receives a pointer-to-pointer (void**) allowing in-place
+    /// update of the reference slot (used by GC for forwarding pointer fixup).
+    void iterate_static_reference_roots(std::function<void(void**)> visitor);
+
     /// Set a GC trigger callback. The heap calls this when allocation
     /// pressure requires a GC cycle. Installed by the Interpreter.
     using GcTriggerFn = std::function<void()>;

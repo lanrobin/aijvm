@@ -120,4 +120,14 @@ ClassLoader::load_from_customer(std::string_view class_name) {
     }
 }
 
+std::vector<std::shared_ptr<classfile::ClassFile>>
+ClassLoader::get_all_loaded_classes() const {
+    std::vector<std::shared_ptr<classfile::ClassFile>> result;
+    result.reserve(cache_.size());
+    for (const auto& [name, cf] : cache_) {
+        result.push_back(cf);
+    }
+    return result;
+}
+
 } // namespace aijvm::classloader
