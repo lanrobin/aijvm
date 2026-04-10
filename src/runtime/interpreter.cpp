@@ -24,6 +24,10 @@ void Interpreter::execute(JavaThread& thread) {
     while (auto* frame = thread.current_frame()) {
         // Safepoint poll at each instruction boundary
         safepoint_mgr_.safepoint_poll();
+        // Auto-GC: trigger when heap usage exceeds half of max heap size
+        if (heap_.should_gc()) {
+            trigger_gc(thread);
+        }
         if (!execute_instruction(thread, *frame)) {
             if (thread.stack_empty()) {
                 safepoint_mgr_.unregister_thread();

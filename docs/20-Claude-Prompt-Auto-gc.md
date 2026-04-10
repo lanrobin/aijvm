@@ -1,0 +1,3 @@
+It seems that the gc is actively triggered, but no automatical gc when free heap is less than half, please help to trigger gc when the free heap hits the half of total memory. 
+
+Following our rules, output ONLY the header definitions (`.hpp`) and brief architectural reasoning. Focus heavily on how the `ObjectHeader` accommodates the forwarding pointer, and how the cooperative STW handshake is synchronized. Do not write the full `.cpp` GC implementation yet.

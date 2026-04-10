@@ -222,6 +222,7 @@ private:
     std::vector<std::unique_ptr<JObject>> objects_;
     std::unique_ptr<GarbageCollector> gc_;
     std::size_t max_heap_size_ = 0;
+    std::size_t last_gc_object_count_ = 0;  // Guard against repeated GC when nothing can be freed
     std::unordered_map<std::string, FieldValue> static_fields_;
 };
 

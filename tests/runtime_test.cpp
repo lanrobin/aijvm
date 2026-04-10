@@ -2,6 +2,7 @@
 
 #include "runtime/slot.h"
 #include "runtime/frame.h"
+#include "runtime/heap.h"
 #include "runtime/java_thread.h"
 
 #include <cmath>
@@ -476,4 +477,71 @@ TEST(JavaThreadTest, StartWithBytecodeExecution) {
     thread.join();
     EXPECT_TRUE(completed);
     EXPECT_TRUE(thread.stack_empty());
+}
+
+// ============================================================================
+// Auto-GC Trigger Tests — Heap::should_gc()
+// ============================================================================
+
+TEST(HeapAutoGCTest, ShouldGcReturnsFalseWhenUnlimited) {
+    // max_heap_size = 0 means unlimited — should never trigger auto-GC
+    Heap heap(std::make_unique<NoOpGC>(), 0);
+    for (int i = 0; i < 100; ++i) {
+        heap.allocate_object("java/lang/Object");
+    }
+    EXPECT_FALSE(heap.should_gc());
+}
+
+TEST(HeapAutoGCTest, ShouldGcReturnsFalseBelowThreshold) {
+    // max_heap_size large enough that a few objects don't exceed half
+    // estimated_memory_usage = object_count * 256
+    // Threshold = max_heap_size / 2
+    // With 10 objects: 10 * 256 = 2560. Need max/2 > 2560 => max > 5120
+    Heap heap(std::make_unique<SemiSpaceGC>(), 65536);
+    for (int i = 0; i < 10; ++i) {
+        heap.allocate_object("java/lang/Object");
+    }
+    EXPECT_FALSE(heap.should_gc());
+}
+
+TEST(HeapAutoGCTest, ShouldGcReturnsTrueAboveThreshold) {
+    // max_heap_size = 4096 => threshold = 2048
+    // Need enough objects so object_count * 256 > 2048 => > 8 objects
+    Heap heap(std::make_unique<SemiSpaceGC>(), 4096);
+    for (int i = 0; i < 10; ++i) {
+        heap.allocate_object("java/lang/Object");
+    }
+    EXPECT_TRUE(heap.should_gc());
+}
+
+TEST(HeapAutoGCTest, ShouldGcReturnsFalseAfterGcWithNoNewAllocations) {
+    // After GC runs, should_gc() returns false until new allocations happen
+    Heap heap(std::make_unique<SemiSpaceGC>(), 4096);
+    for (int i = 0; i < 10; ++i) {
+        heap.allocate_object("java/lang/Object");
+    }
+    EXPECT_TRUE(heap.should_gc());
+
+    // Run GC with no roots — all objects become garbage
+    heap.gc({});
+
+    // After GC, no new allocations => should_gc() returns false
+    EXPECT_FALSE(heap.should_gc());
+}
+
+TEST(HeapAutoGCTest, ShouldGcReturnsTrueAfterNewAllocationsPostGc) {
+    Heap heap(std::make_unique<SemiSpaceGC>(), 4096);
+    for (int i = 0; i < 10; ++i) {
+        heap.allocate_object("java/lang/Object");
+    }
+
+    // Run GC with no roots — clears all objects
+    heap.gc({});
+    EXPECT_FALSE(heap.should_gc());
+
+    // Allocate again past threshold
+    for (int i = 0; i < 10; ++i) {
+        heap.allocate_object("java/lang/Object");
+    }
+    EXPECT_TRUE(heap.should_gc());
 }

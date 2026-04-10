@@ -285,10 +285,15 @@ void Heap::gc(const std::vector<JObject*>& roots) {
             }
         }
     }
+
+    // Record object count after GC to prevent re-triggering without new allocations
+    last_gc_object_count_ = objects_.size();
 }
 
 bool Heap::should_gc() const noexcept {
     if (max_heap_size_ == 0) return false;
+    // Don't re-trigger if no new allocations since last GC
+    if (objects_.size() == last_gc_object_count_) return false;
     return estimated_memory_usage() > max_heap_size_ / 2;
 }
 
