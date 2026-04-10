@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <functional>
 #include <mutex>
+#include <vector>
 
 namespace aijvm::runtime {
 
@@ -26,29 +27,40 @@ namespace aijvm::runtime {
 // This is equivalent to HotSpot's safepoint polling mechanism.
 // ============================================================================
 
+class JavaThread;  // forward declaration
+
 class SafepointManager {
 public:
     SafepointManager() = default;
 
     /// Register a mutator thread. Must be called before the thread starts
     /// executing bytecode. Thread-safe.
-    void register_thread();
+    /// @param thread  Pointer to the JavaThread being registered (for root scanning).
+    void register_thread(JavaThread* thread);
 
     /// Unregister a mutator thread. Called when the thread finishes.
-    void unregister_thread();
+    void unregister_thread(JavaThread* thread);
 
     /// Called by mutator threads at safepoints (backward branches, alloc, etc.).
     /// If a GC is requested, this blocks until the GC is complete.
     void safepoint_poll();
 
     /// Request a stop-the-world pause.
-    /// Blocks until all mutator threads have reached a safepoint.
+    /// Blocks until all other mutator threads have reached a safepoint.
     /// Then executes the given function (typically GC) while all threads are parked.
     /// After the function returns, all threads are resumed.
-    void request_stw(std::function<void()> gc_work);
+    /// @param gc_work           The work to perform while the world is stopped.
+    /// @param caller_is_mutator If true, the calling thread is itself a registered
+    ///                          mutator and should NOT be expected to park. The STW
+    ///                          handshake waits for (total - 1) threads to park.
+    void request_stw(std::function<void()> gc_work, bool caller_is_mutator = false);
 
     /// Check whether GC is currently requested (non-blocking).
     [[nodiscard]] bool gc_requested() const noexcept;
+
+    /// Access all currently registered threads (for GC root scanning).
+    /// Only safe to call while the world is stopped (inside request_stw callback).
+    [[nodiscard]] const std::vector<JavaThread*>& registered_threads() const noexcept;
 
 private:
     std::atomic<bool> gc_requested_{false};
@@ -58,6 +70,7 @@ private:
     std::size_t total_threads_ = 0;       ///< Number of registered mutator threads
     std::size_t parked_threads_ = 0;      ///< Number of threads at safepoint
     bool gc_in_progress_ = false;
+    std::vector<JavaThread*> threads_;    ///< Registry of live mutator threads
 };
 
 } // namespace aijvm::runtime

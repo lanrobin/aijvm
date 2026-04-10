@@ -4,11 +4,15 @@
 #include "runtime/frame.h"
 #include "runtime/heap.h"
 #include "runtime/java_thread.h"
+#include "runtime/safepoint.h"
 
+#include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <thread>
 #include <vector>
 
 using namespace aijvm::runtime;
@@ -544,4 +548,126 @@ TEST(HeapAutoGCTest, ShouldGcReturnsTrueAfterNewAllocationsPostGc) {
         heap.allocate_object("java/lang/Object");
     }
     EXPECT_TRUE(heap.should_gc());
+}
+
+// ============================================================================
+// Stop-The-World Safepoint Tests
+// ============================================================================
+
+TEST(SafepointSTWTest, RegisterAndUnregisterThread) {
+    SafepointManager mgr;
+    JavaThread t1("t1");
+    JavaThread t2("t2");
+
+    mgr.register_thread(&t1);
+    mgr.register_thread(&t2);
+    EXPECT_EQ(mgr.registered_threads().size(), 2u);
+
+    mgr.unregister_thread(&t1);
+    EXPECT_EQ(mgr.registered_threads().size(), 1u);
+    EXPECT_EQ(mgr.registered_threads()[0], &t2);
+
+    mgr.unregister_thread(&t2);
+    EXPECT_TRUE(mgr.registered_threads().empty());
+}
+
+TEST(SafepointSTWTest, RequestSTWFromMutatorSingleThread) {
+    // A single registered mutator thread calls request_stw with caller_is_mutator.
+    // No other threads need to park; the STW work should execute immediately.
+    SafepointManager mgr;
+    JavaThread t1("main");
+    mgr.register_thread(&t1);
+
+    bool work_done = false;
+    mgr.request_stw([&work_done]() {
+        work_done = true;
+    }, /*caller_is_mutator=*/true);
+
+    EXPECT_TRUE(work_done);
+    mgr.unregister_thread(&t1);
+}
+
+TEST(SafepointSTWTest, RequestSTWWithMultipleThreads) {
+    // Simulate multi-threaded STW: register 2 threads, one requests STW,
+    // the other parks via safepoint_poll.
+    SafepointManager mgr;
+    JavaThread t1("main");
+    JavaThread t2("worker");
+
+    mgr.register_thread(&t1);
+    mgr.register_thread(&t2);
+
+    std::atomic<bool> work_done{false};
+    std::atomic<bool> worker_started{false};
+
+    // Worker thread: polls safepoints until it sees work_done
+    std::thread worker([&]() {
+        worker_started.store(true);
+        // Keep polling until the GC cycle completes
+        while (!work_done.load()) {
+            mgr.safepoint_poll();
+        }
+    });
+
+    // Wait for worker to start
+    while (!worker_started.load()) {
+        std::this_thread::yield();
+    }
+
+    // Main thread requests STW — worker should park at safepoint_poll
+    mgr.request_stw([&]() {
+        // During STW, both threads should be accessible
+        EXPECT_EQ(mgr.registered_threads().size(), 2u);
+        work_done.store(true);
+    }, /*caller_is_mutator=*/true);
+
+    worker.join();
+    EXPECT_TRUE(work_done.load());
+
+    mgr.unregister_thread(&t1);
+    mgr.unregister_thread(&t2);
+}
+
+TEST(SafepointSTWTest, STWCollectsRootsFromAllThreads) {
+    // Verify that registered_threads() returns all threads during STW,
+    // enabling root collection from all.
+    SafepointManager mgr;
+    Heap heap(std::make_unique<SemiSpaceGC>(), 65536);
+
+    JavaThread t1("main");
+    JavaThread t2("worker");
+    mgr.register_thread(&t1);
+    mgr.register_thread(&t2);
+
+    std::vector<JavaThread*> seen_threads;
+    std::atomic<bool> done{false};
+    std::atomic<bool> worker_ready{false};
+
+    std::thread worker([&]() {
+        worker_ready.store(true);
+        while (!done.load()) {
+            mgr.safepoint_poll();
+        }
+    });
+
+    while (!worker_ready.load()) {
+        std::this_thread::yield();
+    }
+
+    mgr.request_stw([&]() {
+        for (auto* t : mgr.registered_threads()) {
+            seen_threads.push_back(t);
+        }
+        done.store(true);
+    }, /*caller_is_mutator=*/true);
+
+    worker.join();
+
+    EXPECT_EQ(seen_threads.size(), 2u);
+    // Both threads should be in the list (order not guaranteed)
+    EXPECT_TRUE(std::find(seen_threads.begin(), seen_threads.end(), &t1) != seen_threads.end());
+    EXPECT_TRUE(std::find(seen_threads.begin(), seen_threads.end(), &t2) != seen_threads.end());
+
+    mgr.unregister_thread(&t1);
+    mgr.unregister_thread(&t2);
 }

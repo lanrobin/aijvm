@@ -20,7 +20,7 @@ Interpreter::Interpreter(Heap& heap, classloader::ClassLoader& class_loader,
       safepoint_mgr_(safepoint_mgr) {}
 
 void Interpreter::execute(JavaThread& thread) {
-    safepoint_mgr_.register_thread();
+    safepoint_mgr_.register_thread(&thread);
     while (auto* frame = thread.current_frame()) {
         // Safepoint poll at each instruction boundary
         safepoint_mgr_.safepoint_poll();
@@ -30,7 +30,7 @@ void Interpreter::execute(JavaThread& thread) {
         }
         if (!execute_instruction(thread, *frame)) {
             if (thread.stack_empty()) {
-                safepoint_mgr_.unregister_thread();
+                safepoint_mgr_.unregister_thread(&thread);
                 return;
             }
         }
@@ -1340,26 +1340,33 @@ void Interpreter::ensure_initialized(JavaThread& thread, std::string_view class_
     cf->init_state = ClassFile::InitState::Initialized;
 }
 
-void Interpreter::trigger_gc(JavaThread& thread) {
-    // Collect GC roots from:
-    //   1. All reference slots in the thread's frame stack (locals + operand stack)
-    //   2. Static fields are handled by Heap::gc() internally
+void Interpreter::trigger_gc([[maybe_unused]] JavaThread& thread) {
+    // Stop-The-World GC: park all other mutator threads, then collect.
+    // The calling thread is a registered mutator (caller_is_mutator = true),
+    // so request_stw waits for (total - 1) threads to park.
+    safepoint_mgr_.request_stw([this]() {
+        // Collect GC roots from ALL registered threads' stacks.
+        // Static fields are handled by Heap::gc() internally.
+        std::vector<void*> raw_roots;
+        for (auto* t : safepoint_mgr_.registered_threads()) {
+            t->collect_gc_roots(raw_roots);
+        }
 
-    std::vector<void*> raw_roots;
-    thread.collect_gc_roots(raw_roots);
+        // Convert to JObject* for the GC interface
+        std::vector<JObject*> roots;
+        roots.reserve(raw_roots.size());
+        for (auto* ptr : raw_roots) {
+            roots.push_back(static_cast<JObject*>(ptr));
+        }
 
-    // Convert to JObject* for the GC interface
-    std::vector<JObject*> roots;
-    roots.reserve(raw_roots.size());
-    for (auto* ptr : raw_roots) {
-        roots.push_back(static_cast<JObject*>(ptr));
-    }
+        // Run GC
+        heap_.gc(roots);
 
-    // Run GC
-    heap_.gc(roots);
-
-    // After GC, update all thread stack references via forwarding pointers
-    thread.update_gc_references();
+        // After GC, update ALL thread stack references via forwarding pointers
+        for (auto* t : safepoint_mgr_.registered_threads()) {
+            t->update_gc_references();
+        }
+    }, /*caller_is_mutator=*/true);
 }
 
 } // namespace aijvm::runtime
