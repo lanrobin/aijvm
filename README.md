@@ -17,10 +17,10 @@ AIJVM is a working JVM interpreter that can execute compiled Java `.class` files
 
 | Metric | Value |
 |--------|-------|
-| C++ source + headers | ~7,100 lines |
-| Test code | ~2,100 lines |
-| Unit tests (GoogleTest) | 121 |
-| AI prompts (docs/) | 19 iterations |
+| C++ source + headers | ~7,300 lines |
+| Test code | ~2,300 lines |
+| Unit tests (GoogleTest) | 130 |
+| AI prompts (docs/) | 23 iterations |
 | Hand-written C++ | 0 lines |
 
 ## Demo Programs
@@ -141,7 +141,7 @@ Each file in `docs/` is a natural language prompt given to Claude AI. The prompt
 3. **Tests** — AI generates GoogleTest cases alongside every implementation
 4. **Iterate** — Run, find errors, give error output back to AI, fix
 
-The 19 prompt iterations built the JVM incrementally:
+The 23 prompt iterations built the JVM incrementally:
 
 | # | Prompt | Subsystem |
 |---|--------|-----------|
@@ -164,6 +164,10 @@ The 19 prompt iterations built the JVM incrementally:
 | 17 | Fix: VS2022 build | Cross-platform compatibility fixes for MSVC |
 | 18 | Update README | Project documentation |
 | 19 | Class init optimization | Moved `ClassInitState` from Heap map to per-`ClassFile` field |
+| 20 | Auto-GC trigger | `should_gc()` called at allocation sites, accurate `estimated_size()` memory tracking |
+| 21 | Stop-the-world GC | `SafepointManager` thread registry, STW handshake with `caller_is_mutator`, multi-thread root scanning |
+| 22 | Fix: GC heap pressure | `check_heap_pressure()` with GC-retry before OOM, `set_gc_trigger()` callback from Heap to Interpreter |
+| 23 | Fix: GCTest constants | Corrected payload size check (1024→10240) and expected node count (41→401) |
 
 ## License
 
