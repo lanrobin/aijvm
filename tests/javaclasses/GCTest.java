@@ -57,7 +57,7 @@ public class GCTest {
             count++;
             // If payload.length throws an error or holds an invalid value, 
             // the array object header was corrupted during the Cheney copy phase.
-            if (temp.payload.length != 1024) {
+            if (temp.payload.length != 10240) {
                 System.out.println("Error: Object corruption detected at node " + temp.id);
             }
             temp = temp.next;
@@ -65,11 +65,11 @@ public class GCTest {
         
         System.out.println("Total survived nodes in linked list: " + count);
         
-        // Expected output: 1 (head) + (40000 / 1000) = 41 nodes.
-        if (count == 41) {
+        // Expected output: 1 (head) + (400000 / 1000) = 401 nodes.
+        if (count == 401) {
             System.out.println("GC Test Finished Successfully! Cheney Algorithm is solid.");
         } else {
-            System.out.println("GC Test FAILED. Expected 41 nodes, found: " + count);
+            System.out.println("GC Test FAILED. Expected 401 nodes, found: " + count);
         }
     }
 }
